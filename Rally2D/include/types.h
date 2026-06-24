@@ -8,6 +8,8 @@
 #define SCREEN_TITLE "Rally 2D"
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
+#define BORDER_LEFT 100
+#define BORDER_RIGHT 550
 
 // FPS
 #define TARGET_FPS 60
@@ -75,12 +77,12 @@
 #define GAMEOVER_PATH "assets/gameOver.png"
 
 // Fallback
-#define COL_CAR_FALLBACK (Color) { 220, 50, 50, 255 } // red
-#define COL_OBSTACLE_FALLBACK (Color) { 80, 80, 80, 255 } // dark grey
-#define COL_ENERGY_FALLBACK (Color) { 0, 200, 80, 255 } // green
-#define COL_SPEED_FALLBACK (Color) { 30, 144, 255, 255 } // blue
-#define COL_ODOM_FALLBACK (Color) { 255, 165, 0, 255 } // orange
-#define COL_ARROW_FALLBACK (Color) { 255, 255, 255, 255 } // white
+#define COLOR_CAR_FALLBACK (Color) { 220, 50, 50, 255 } // red
+#define COLOR_OBSTACLE_FALLBACK (Color) { 76, 63, 47, 255 } // Dark Brown
+#define COLOR_ENERGY_FALLBACK (Color) { 0, 200, 80, 255 } // green
+#define COLOR_SPEED_FALLBACK (Color) { 30, 144, 255, 255 } // blue
+#define COLOR_ODOM_FALLBACK (Color) { 255, 165, 0, 255 } // orange
+#define COLOR_ARROW_FALLBACK (Color) { 255, 255, 255, 255 } // white
 
 typedef struct {
     int srcX; // source X offset inside the texture (pixels)

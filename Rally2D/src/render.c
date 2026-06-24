@@ -14,8 +14,8 @@ void RenderFrame(const Game* game, int screenW, int screenH)
     BeginDrawing();
 
     DrawLayerBackground(game, screenW, screenH); // layer 0
-    DrawLayerCar(game); // layer 1
-    DrawLayerObstacle(game); // layer 2
+    DrawLayerObstacle(game); // layer 1
+    DrawLayerCar(game); // layer 2
     DrawLayerHUD(game, screenH); // layer 3
 
     if (game->state == STATE_GAMEOVER)
@@ -45,7 +45,7 @@ void DrawLayerObstacle(const Game* game)
     } else {
         DrawSpriteFallback(sheet, obs->frame,
             obs->pos.x, obs->pos.y,
-            COL_OBSTACLE_FALLBACK);
+            COLOR_OBSTACLE_FALLBACK);
     }
 }
 
@@ -62,7 +62,7 @@ void DrawLayerCar(const Game* game)
     } else {
         DrawSpriteFallback(sheet, car->frame,
             car->pos.x, car->pos.y,
-            COL_CAR_FALLBACK);
+            COLOR_CAR_FALLBACK);
     }
 }
 
@@ -81,7 +81,7 @@ void DrawLayerHUD(const Game* game, int screenH)
             if (s->loaded)
                 DrawSprite(s, frame, 10.0f, 10.0f);
             else
-                DrawSpriteFallback(s, frame, 10.0f, 10.0f, COL_ENERGY_FALLBACK);
+                DrawSpriteFallback(s, frame, 10.0f, 10.0f, COLOR_ENERGY_FALLBACK);
         }
     }
 
@@ -92,7 +92,7 @@ void DrawLayerHUD(const Game* game, int screenH)
             if (s->loaded)
                 DrawSprite(s, frame, 50.0f, 10.0f);
             else
-                DrawSpriteFallback(s, frame, 50.0f, 10.0f, COL_SPEED_FALLBACK);
+                DrawSpriteFallback(s, frame, 50.0f, 10.0f, COLOR_SPEED_FALLBACK);
         }
     }
 
@@ -103,7 +103,7 @@ void DrawLayerHUD(const Game* game, int screenH)
             if (s->loaded)
                 DrawSprite(s, frame, 98.0f, 90.0f);
             else
-                DrawSpriteFallback(s, frame, 98.0f, 90.0f, COL_ODOM_FALLBACK);
+                DrawSpriteFallback(s, frame, 98.0f, 90.0f, COLOR_ODOM_FALLBACK);
         }
     }
 
@@ -117,7 +117,7 @@ void DrawLayerHUD(const Game* game, int screenH)
             if (s->loaded)
                 DrawSprite(s, frame, 10.0f, y);
             else
-                DrawSpriteFallback(s, frame, 10.0f, y, COL_ARROW_FALLBACK);
+                DrawSpriteFallback(s, frame, 10.0f, y, COLOR_ARROW_FALLBACK);
         }
     }
 }
@@ -136,7 +136,7 @@ void DrawLayerGameOver(const Game* game, int screenW, int screenH)
         int px = (screenW - pw) / 2;
         int py = (screenH - ph) / 2;
 
-        DrawRectangle(px, py, pw, ph, (Color) { 0, 0, 0, 200 });
+        DrawRectangle(px, py, pw, ph, BLACK);
         DrawRectangleLines(px, py, pw, ph, RED);
 
         const char* msg = "GAME OVER";

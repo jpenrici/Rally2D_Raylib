@@ -15,10 +15,6 @@ void HandleInput(Game* game)
         return;
     }
 
-    if (game->state == STATE_GAMEOVER) {
-        return;
-    }
-
     if (game->state != STATE_PLAYING)
         return;
 
@@ -40,15 +36,13 @@ void HandleInput(Game* game)
 
     if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
         arrowFrame = 3;
-        if (car->pos.x > 0.0f)
+        if (car->pos.x > BORDER_LEFT)
             car->pos.x -= car->step;
     }
 
     if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
         arrowFrame = 4;
-        int screenW = GetScreenWidth();
-        int carW = car->sheet.frames ? car->sheet.frames[0].width : 128;
-        if (car->pos.x < (float)(screenW - carW))
+        if (car->pos.x < BORDER_RIGHT)
             car->pos.x += car->step;
     }
 

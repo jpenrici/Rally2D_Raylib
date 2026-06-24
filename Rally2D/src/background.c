@@ -20,7 +20,7 @@ void UpdateScroll(ScrollBackground* bg, float speed)
 
     bg->scrollOffset += speed;
 
-    float wrapAt = bg->loaded ? (float)bg->texture.height : (float)SCREEN_WIDTH;
+    float wrapAt = bg->loaded ? bg->texture.height : SCREEN_WIDTH;
 
     if (bg->scrollOffset >= wrapAt) {
         bg->scrollOffset -= wrapAt;
@@ -33,7 +33,7 @@ void DrawBackground(const ScrollBackground* bg, int screenW, int screenH)
         return;
 
     if (!bg->loaded) {
-        DrawRectangle(0, 0, screenW, screenH, (Color) { 40, 40, 40, 255 });
+        DrawRectangle(0, 0, screenW, screenH, DARKGRAY);
 
         int laneX = screenW / 2;
         int dashH = 60;
@@ -42,7 +42,7 @@ void DrawBackground(const ScrollBackground* bg, int screenW, int screenH)
         int offset = (int)bg->scrollOffset % period;
 
         for (int y = -period + offset; y < screenH + period; y += period) {
-            DrawRectangle(laneX - 3, y, 6, dashH, (Color) { 200, 200, 0, 180 });
+            DrawRectangle(laneX - 3, y, 6, dashH, YELLOW);
         }
 
         return;

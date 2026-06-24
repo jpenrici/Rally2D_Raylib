@@ -73,17 +73,17 @@ void GameUpdate(Game* game)
     // Player
     Car* car = &game->car;
     Obstacle* obs = &game->obstacle;
-    int scrW = GetScreenWidth();
-    int scrH = GetScreenHeight();
+    int scrW = SCREEN_WIDTH;
+    int scrH = SCREEN_HEIGHT;
 
-    car->step = car->velocity / (float)PLAYER_MOVE_HORIZONTAL;
+    car->step = car->velocity / PLAYER_MOVE_HORIZONTAL;
 
-    if (car->velocity <= 0.0f) {
+    if (car->velocity <= VEL_MIN) {
         car->frame = 4;
         car->animTimer = 0;
     }
 
-    if (car->velocity > 0.0f) {
+    if (car->velocity > VEL_MIN) {
         AnimateSprite(&car->frame, &car->animTimer, 0, 3, 3);
     }
 
@@ -102,7 +102,7 @@ void GameUpdate(Game* game)
         ResolveCollision(car, obs, scrW);
     }
 
-    if (car->energy <= 0) {
+    if (car->energy <= ENERGY_MIN) {
         game->state = STATE_GAMEOVER;
     }
 }
