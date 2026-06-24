@@ -4,6 +4,84 @@
 
 #include <stdbool.h>
 
+// Window
+#define SCREEN_TITLE "Rally 2D"
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
+
+// FPS
+#define TARGET_FPS 60
+
+// Background
+#define BG_PATH "assets/background.png"
+#define BG_WIDTH 800
+#define BG_HEIGHT 600
+
+// Player - Car
+#define PLAYER_PATH "assets/player-sprite.png"
+#define PLAYER_WIDTH 128
+#define PLAYER_HEIGHT 256
+#define PLAYER_ROWS 1
+#define PLAYER_COLS 6
+#define PLAYER_MOVE_HORIZONTAL 4
+#define PLAYER_MOVE_VERTICAL 0
+
+#define VEL_MAX 60.0f
+#define VEL_MIN 0.0f
+#define BRAKING_SPEED 5.0f
+
+// Obstacle
+#define OBSTACLE_PATH "assets/obstacle-sprite.png"
+#define OBSTACLE_WIDTH 192
+#define OBSTACLE_HEIGHT 192
+#define OBSTACLE_ROWS 1
+#define OBSTACLE_COLS 6
+
+// Speedometer
+#define SPEEDOMETER_PATH "assets/speedometer-sprite.png"
+#define SPEEDOMETER_WIDTH 128
+#define SPEEDOMETER_HEIGHT 128
+#define SPEEDOMETER_ROWS 7
+#define SPEEDOMETER_COLS 10
+#define SPEEDOMETER_MIN 0
+#define SPEEDOMETER_MAX 60
+
+// Ometer
+#define ODOMETER_PATH "assets/odometer-sprite.png"
+#define ODOMETER_WIDTH 34
+#define ODOMETER_HEIGHT 20
+#define ODOMETER_ROWS 50
+#define ODOMETER_COLS 10
+#define ODOMETER_MIN 0
+#define ODOMETER_MAX 500
+
+// Energy
+#define ENERGY_PATH "assets/energy-sprite.png"
+#define ENERGY_WIDTH 48
+#define ENERGY_HEIGHT 128
+#define ENERGY_ROWS 1
+#define ENERGY_COLS 11
+#define ENERGY_MIN 0
+#define ENERGY_MAX 10
+
+// Arrow
+#define ARROW_PATH "assets/arrow-sprite.png"
+#define ARROW_WIDTH 64
+#define ARROW_HEIGHT 64
+#define ARROW_ROWS 1
+#define ARROW_COLS 5
+
+// Game Over
+#define GAMEOVER_PATH "assets/gameOver.png"
+
+// Fallback
+#define COL_CAR_FALLBACK (Color) { 220, 50, 50, 255 } // red
+#define COL_OBSTACLE_FALLBACK (Color) { 80, 80, 80, 255 } // dark grey
+#define COL_ENERGY_FALLBACK (Color) { 0, 200, 80, 255 } // green
+#define COL_SPEED_FALLBACK (Color) { 30, 144, 255, 255 } // blue
+#define COL_ODOM_FALLBACK (Color) { 255, 165, 0, 255 } // orange
+#define COL_ARROW_FALLBACK (Color) { 255, 255, 255, 255 } // white
+
 typedef struct {
     int srcX; // source X offset inside the texture (pixels)
     int srcY; // source Y offset inside the texture (pixels)

@@ -1,13 +1,17 @@
 #include "raylib.h"
 
-#include "sprite.h"
-
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "sprite.h"
 
 void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols,
     int frameW, int frameH)
 {
+    if (sheet == NULL)
+        return;
+
     int count = rows * cols;
 
     sheet->frames = (Sprite*)malloc((size_t)count * sizeof(Sprite));
@@ -42,6 +46,9 @@ void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols,
 
 void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y)
 {
+    if (sheet == NULL)
+        return;
+
     if (frame < 0 || frame >= sheet->count)
         return;
 
@@ -65,6 +72,9 @@ void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y)
 void DrawSpriteFallback(const SpriteSheet* sheet, int frame, float x, float y,
     Color color)
 {
+    if (sheet == NULL)
+        return;
+
     if (frame < 0 || frame >= sheet->count)
         return;
 

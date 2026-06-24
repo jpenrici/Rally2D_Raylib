@@ -1,12 +1,15 @@
 #include "raylib.h"
 
-#include "input.h"
+#include <stddef.h>
 
-#define VEL_MAX 60.0f
-#define VEL_MIN 0.0f
+#include "input.h"
+#include "types.h"
 
 void HandleInput(Game* game)
 {
+    if (game == NULL)
+        return;
+
     if (IsKeyPressed(KEY_ESCAPE)) {
         game->state = STATE_QUIT;
         return;
@@ -22,26 +25,26 @@ void HandleInput(Game* game)
     Car* car = &game->car;
     int arrowFrame = 0;
 
-    if (IsKeyDown(KEY_W)) {
+    if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP)) {
         arrowFrame = 1;
         if (car->velocity < VEL_MAX)
             car->velocity += 1.0f;
     }
 
-    if (IsKeyDown(KEY_S)) {
+    if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN)) {
         arrowFrame = 2;
         car->frame = 5;
         if (car->velocity > VEL_MIN)
             car->velocity -= 1.0f;
     }
 
-    if (IsKeyDown(KEY_A)) {
+    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) {
         arrowFrame = 3;
         if (car->pos.x > 0.0f)
             car->pos.x -= car->step;
     }
 
-    if (IsKeyDown(KEY_D)) {
+    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) {
         arrowFrame = 4;
         int screenW = GetScreenWidth();
         int carW = car->sheet.frames ? car->sheet.frames[0].width : 128;

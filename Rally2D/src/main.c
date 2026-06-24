@@ -1,33 +1,38 @@
 #include "raylib.h"
 
+#include <stddef.h>
+
 #include "game.h"
 #include "types.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-#define WINDOW_TITLE "Rally 2D"
-#define TARGET_FPS 60
-
 int main(void)
 {
-    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE);
+    // Window
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE);
     SetTargetFPS(TARGET_FPS);
 
+    // Initialize
     Game game = { 0 };
-    GameInit(&game, WINDOW_WIDTH, WINDOW_HEIGHT);
+    GameInit(&game, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    // Loop
     while (!WindowShouldClose() && game.state != STATE_QUIT) {
+        // Events
         GameHandleInput(&game);
 
+        // Update
         if (game.state == STATE_PLAYING)
             GameUpdate(&game);
 
+        // Render
         GameRender(&game);
 
+        // Reset
         if (game.state == STATE_GAMEOVER && IsKeyPressed(KEY_SPACE))
-            GameInit(&game, WINDOW_WIDTH, WINDOW_HEIGHT);
+            GameInit(&game, SCREEN_WIDTH, SCREEN_HEIGHT);
     }
 
+    // Exit
     GameQuit(&game);
     CloseWindow();
 

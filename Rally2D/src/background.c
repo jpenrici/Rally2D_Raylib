@@ -1,8 +1,9 @@
 #include "raylib.h"
 
-#include "background.h"
+#include <stddef.h>
 
-#include <stdlib.h>
+#include "background.h"
+#include "types.h"
 
 void InitScroll(ScrollBackground* bg)
 {
@@ -19,7 +20,7 @@ void UpdateScroll(ScrollBackground* bg, float speed)
 
     bg->scrollOffset += speed;
 
-    float wrapAt = bg->loaded ? (float)bg->texture.height : 600.0f; // WINDOW_HEIGHT
+    float wrapAt = bg->loaded ? (float)bg->texture.height : (float)SCREEN_WIDTH;
 
     if (bg->scrollOffset >= wrapAt) {
         bg->scrollOffset -= wrapAt;

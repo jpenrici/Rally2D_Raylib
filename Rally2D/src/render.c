@@ -1,38 +1,42 @@
 #include "raylib.h"
 
+#include <stddef.h>
+
 #include "background.h"
 #include "render.h"
 #include "sprite.h"
 
-#define COL_CAR_FALLBACK (Color) { 220, 50, 50, 255 } /* red        */
-#define COL_OBSTACLE_FALLBACK (Color) { 80, 80, 80, 255 } /* dark grey  */
-#define COL_ENERGY_FALLBACK (Color) { 0, 200, 80, 255 } /* green      */
-#define COL_SPEED_FALLBACK (Color) { 30, 144, 255, 255 } /* blue       */
-#define COL_ODOM_FALLBACK (Color) { 255, 165, 0, 255 } /* orange     */
-#define COL_ARROW_FALLBACK (Color) { 255, 255, 255, 255 } /* white      */
-
 void RenderFrame(const Game* game, int screenW, int screenH)
 {
+    if (game == NULL)
+        return;
+
     BeginDrawing();
 
-    DrawLayerBackground(game, screenW, screenH); /* layer 0 */
-    DrawLayerObstacle(game); /* layer 1 */
-    DrawLayerCar(game); /* layer 2 */
-    DrawLayerHUD(game, screenH); /* layer 3 */
+    DrawLayerBackground(game, screenW, screenH); // layer 0
+    DrawLayerCar(game); // layer 1
+    DrawLayerObstacle(game); // layer 2
+    DrawLayerHUD(game, screenH); // layer 3
 
     if (game->state == STATE_GAMEOVER)
-        DrawLayerGameOver(game, screenW, screenH); /* layer 4 */
+        DrawLayerGameOver(game, screenW, screenH); // layer 4
 
     EndDrawing();
 }
 
 void DrawLayerBackground(const Game* game, int screenW, int screenH)
 {
+    if (game == NULL)
+        return;
+
     DrawBackground(&game->background, screenW, screenH);
 }
 
 void DrawLayerObstacle(const Game* game)
 {
+    if (game == NULL)
+        return;
+
     const Obstacle* obs = &game->obstacle;
     const SpriteSheet* sheet = &obs->sheet;
 
@@ -47,6 +51,9 @@ void DrawLayerObstacle(const Game* game)
 
 void DrawLayerCar(const Game* game)
 {
+    if (game == NULL)
+        return;
+
     const Car* car = &game->car;
     const SpriteSheet* sheet = &car->sheet;
 
@@ -61,6 +68,9 @@ void DrawLayerCar(const Game* game)
 
 void DrawLayerHUD(const Game* game, int screenH)
 {
+    if (game == NULL)
+        return;
+
     const Car* car = &game->car;
     const HUD* hud = &game->hud;
 
@@ -100,7 +110,7 @@ void DrawLayerHUD(const Game* game, int screenH)
     {
         const SpriteSheet* s = &hud->arrow;
         int frame = hud->arrowFrame;
-        int arrowH = s->frames ? s->frames[0].height : 64;
+        int arrowH = s->frames ? s->frames[0].height : ARROW_HEIGHT;
         float y = (float)(screenH - arrowH);
 
         if (frame >= 0 && frame < s->count) {
@@ -114,6 +124,9 @@ void DrawLayerHUD(const Game* game, int screenH)
 
 void DrawLayerGameOver(const Game* game, int screenW, int screenH)
 {
+    if (game == NULL)
+        return;
+
     if (game->gameOverLoaded) {
         float x = (float)(screenW - game->gameOverTexture.width) * 0.5f;
         float y = (float)(screenH - game->gameOverTexture.height) * 0.5f;
