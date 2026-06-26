@@ -3,10 +3,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define SCREEN_TITLE "Connect Dots"
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
+#define BOX_WIDTH 750
+#define BOX_HEIGHT 550
 
 typedef enum {
     STATE_PLAYING,
@@ -16,13 +19,14 @@ typedef enum {
 } GameState;
 
 typedef struct {
-    Vector2 a, b, c, d;
-} ShapeCollider;
+    Vector2 center;
+    int radius;
+} CircleCollider;
 
 typedef struct {
     bool marked;
     Vector2 center;
-    ShapeCollider collider;
+    CircleCollider collider;
 } Shape;
 
 typedef struct {
@@ -30,16 +34,15 @@ typedef struct {
 } Cursor;
 
 typedef struct {
-    Shape* graph;
+    Shape* shapes;
+    unsigned elements;
     bool closed;
 } Graph;
 
 typedef struct {
     unsigned int level;
-    unsigned int score;
     unsigned int timer;
     Cursor cursor;
-    Shape shape;
     Graph graph;
     GameState state;
 } Game;
@@ -58,7 +61,10 @@ static void DrawGraph(const Graph* graph);
 static void DrawHud(const Game* game);
 static void DrawGameOver(void);
 
-static void generate(Graph* graph);
+static void Generate(Graph* graph, unsigned int vertices);
+static void InfoShape(const Shape* shape);
+static void InfoCircleCollider(const CircleCollider* cc);
+static void InfoGraph(const Graph* graph);
 
 int main(void)
 {
@@ -102,22 +108,14 @@ int main(void)
 
 static void GameInit(Game* game)
 {
-    // Test
-    game->level = 1;
-    game->score = 0;
+    game->level = 3;
     game->timer = 0;
 
-    Shape* shape = &game->shape;
-    shape->marked = false;
-    int x = 100, y = 100, r = 10; // Test
-    shape->center = (Vector2) { .x = x, .y = y };
-    shape->collider = (ShapeCollider) {
-        (Vector2) { x - r, y }, (Vector2) { x + r, y },
-        (Vector2) { x + r, y + r }, (Vector2) { x, y + r }
-    };
-
     Cursor* cursor = &game->cursor;
-    cursor->center = (Vector2) { .x = 150, .y = 150 };
+    cursor->center = (Vector2) { .x = SCREEN_WIDTH / 2.0f, .y = SCREEN_HEIGHT / 2.0f };
+
+    Generate(&game->graph, game->level);
+    InfoGraph(&game->graph);
 
     game->state = STATE_PLAYING;
 }
@@ -128,10 +126,20 @@ static void GameHandleInput(Game* game)
         return;
 
     // Mouse
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        Vector2 mousePos = GetMousePosition();
+        game->cursor.center = mousePos;
+        // TraceLog(LOG_INFO, "[Game] Time: %d Cursor: (%f, %f)\n", game->timer, game->cursor.center.x, game->cursor.center.y);
+    }
 
     // Keyboard
     if (IsKeyPressed(KEY_Q)) {
         game->state = STATE_QUIT;
+    }
+
+    if (IsKeyPressed(KEY_R)) {
+        TraceLog(LOG_INFO, "Restart...");
+        GameInit(game);
     }
 }
 
@@ -149,9 +157,9 @@ static void GameRender(const Game* game)
 
     // Test
     DrawBackground();
-    DrawShape(&game->shape);
-    DrawCursor(&game->cursor);
     DrawGraph(&game->graph);
+    DrawCursor(&game->cursor);
+    DrawHud(game);
 }
 
 static void GamePlay(Game* game)
@@ -169,7 +177,9 @@ static void GameQuit(Game* game)
 
 static void DrawBackground(void)
 {
-    DrawText("Game Running Test! Press ESC to exit.", 50, 20, 20, LIGHTGRAY);
+    int x = (int)((SCREEN_WIDTH - BOX_WIDTH) / 2.0f);
+    int y = (int)((SCREEN_HEIGHT - BOX_HEIGHT) / 2.0f);
+    DrawRectangle(x, y, BOX_WIDTH, BOX_HEIGHT, GRAY);
 }
 
 static void DrawShape(const Shape* shape)
@@ -177,7 +187,8 @@ static void DrawShape(const Shape* shape)
     if (shape == NULL)
         return;
 
-    DrawCircle(shape->center.x, shape->center.y, 20, RED);
+    Color color = shape->marked ? RED : YELLOW;
+    DrawCircle(shape->center.x, shape->center.y, 20, color);
 }
 
 static void DrawCursor(const Cursor* cursor)
@@ -196,15 +207,73 @@ static void DrawGraph(const Graph* graph)
 
     DrawLine(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, DARKGRAY);
     DrawLine(SCREEN_WIDTH, 0, 0, SCREEN_HEIGHT, DARKGRAY);
+
+    for (int i = 0; i < graph->elements; ++i) {
+        DrawShape(&graph->shapes[i]);
+    }
 }
 
 static void DrawHud(const Game* game)
 {
     // Draw: Display
     // Draw: Time, Score and Help.
+    DrawText("Game Running Test! Press ESC to exit.", 50, 20, 20, LIGHTGRAY);
 }
 
 static void DrawGameOver(void)
 {
     // Draw: Game Over
+}
+
+static void Generate(Graph* graph, unsigned int vertices)
+{
+    if (graph == NULL)
+        return;
+
+    if (vertices < 1)
+        return;
+
+    graph->shapes = malloc(sizeof(Shape) * vertices);
+    if (graph->shapes == NULL)
+        return;
+
+    graph->elements = vertices;
+    for (int i = 0; i < vertices; ++i) {
+        Vector2 center = (Vector2) {
+            .x = GetRandomValue(0, SCREEN_WIDTH),
+            .y = GetRandomValue(0, SCREEN_HEIGHT)
+        };
+        CircleCollider cc = { .center = center, .radius = 10 };
+        graph->shapes[i] = (Shape) { .center = center, .collider = cc, .marked = false };
+    }
+}
+
+static void InfoShape(const Shape* shape)
+{
+    if (shape == NULL)
+        return;
+
+    printf("[Shape: (%f, %f), %s] ", shape->center.x, shape->center.y,
+        shape->marked ? "marked" : "free");
+    InfoCircleCollider(&shape->collider);
+}
+
+static void InfoCircleCollider(const CircleCollider* cc)
+{
+    if (cc == NULL)
+        return;
+
+    printf("[Circle Collider: (%f, %f), %d]", cc->center.x, cc->center.y, cc->radius);
+}
+
+static void InfoGraph(const Graph* graph)
+{
+    if (graph == NULL)
+        return;
+
+    for (int i = 0; i < graph->elements; ++i) {
+        printf("[%d]: ", i);
+        InfoShape(&graph->shapes[i]);
+        printf("\n");
+    }
 }
