@@ -11,8 +11,8 @@ Optionally, see also: [SDL](https://github.com/jpenrici/Rally_SDL), [Javascript]
 
 ## Display
 
-![Game](https://github.com/jpenrici/Rally2D_Raylib/blob/main/Rally2D/display/display.png)
+![Game](https://github.com/jpenrici/Raylib_Games_Experiments/blob/main/Rally2D/display/display.png)
 
 ## Learn more:
 
-[raylib](https://www.raylib.com) : A simple and easy-to-use library to enjoy videogames programming.<br>
+[raylib](https://www.raylib.com) : A simple and easy-to-use library to enjoy videogames programming.
