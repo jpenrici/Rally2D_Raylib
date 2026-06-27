@@ -9,9 +9,6 @@
 void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols,
     int frameW, int frameH)
 {
-    if (sheet == NULL)
-        return;
-
     int count = rows * cols;
 
     sheet->frames = (Sprite*)malloc((size_t)count * sizeof(Sprite));
@@ -46,9 +43,6 @@ void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols,
 
 void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y)
 {
-    if (sheet == NULL)
-        return;
-
     if (frame < 0 || frame >= sheet->count)
         return;
 
@@ -72,9 +66,6 @@ void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y)
 void DrawSpriteFallback(const SpriteSheet* sheet, int frame, float x, float y,
     Color color)
 {
-    if (sheet == NULL)
-        return;
-
     if (frame < 0 || frame >= sheet->count)
         return;
 
@@ -101,9 +92,6 @@ void AnimateSprite(int* frame, int* timer, int firstFrame, int lastFrame,
 
 void ResizeSprite(SpriteSheet* sheet, int newW, int newH)
 {
-    if (sheet == NULL || sheet->frames == NULL)
-        return;
-
     for (int i = 0; i < sheet->count; i++) {
         if (newW > 0)
             sheet->frames[i].width = newW;
@@ -114,9 +102,6 @@ void ResizeSprite(SpriteSheet* sheet, int newW, int newH)
 
 void UnloadSheet(SpriteSheet* sheet)
 {
-    if (sheet == NULL)
-        return;
-
     free(sheet->frames);
     sheet->frames = NULL;
     sheet->count = 0;

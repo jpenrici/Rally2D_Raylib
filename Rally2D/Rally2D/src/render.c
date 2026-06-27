@@ -8,9 +8,6 @@
 
 void RenderFrame(const Game* game, int screenW, int screenH)
 {
-    if (game == NULL)
-        return;
-
     BeginDrawing();
 
     DrawLayerBackground(game, screenW, screenH); // layer 0
@@ -26,17 +23,11 @@ void RenderFrame(const Game* game, int screenW, int screenH)
 
 void DrawLayerBackground(const Game* game, int screenW, int screenH)
 {
-    if (game == NULL)
-        return;
-
     DrawBackground(&game->background, screenW, screenH);
 }
 
 void DrawLayerObstacle(const Game* game)
 {
-    if (game == NULL)
-        return;
-
     const Obstacle* obs = &game->obstacle;
     const SpriteSheet* sheet = &obs->sheet;
 
@@ -51,9 +42,6 @@ void DrawLayerObstacle(const Game* game)
 
 void DrawLayerCar(const Game* game)
 {
-    if (game == NULL)
-        return;
-
     const Car* car = &game->car;
     const SpriteSheet* sheet = &car->sheet;
 
@@ -68,9 +56,6 @@ void DrawLayerCar(const Game* game)
 
 void DrawLayerHUD(const Game* game, int screenH)
 {
-    if (game == NULL)
-        return;
-
     const Car* car = &game->car;
     const HUD* hud = &game->hud;
 
@@ -124,9 +109,6 @@ void DrawLayerHUD(const Game* game, int screenH)
 
 void DrawLayerGameOver(const Game* game, int screenW, int screenH)
 {
-    if (game == NULL)
-        return;
-
     if (game->gameOverLoaded) {
         float x = (float)(screenW - game->gameOverTexture.width) * 0.5f;
         float y = (float)(screenH - game->gameOverTexture.height) * 0.5f;

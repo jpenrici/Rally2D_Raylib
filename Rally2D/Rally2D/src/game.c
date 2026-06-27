@@ -13,9 +13,6 @@
 
 void GameInit(Game* game, int screenW, int screenH)
 {
-    if (game == NULL)
-        return;
-
     static bool assetsLoaded = false;
     if (!assetsLoaded) {
         LoadAllAssets(game, screenW, screenH);
@@ -59,17 +56,11 @@ void GameInit(Game* game, int screenW, int screenH)
 
 void GameHandleInput(Game* game)
 {
-    if (game == NULL)
-        return;
-
     HandleInput(game);
 }
 
 void GameUpdate(Game* game)
 {
-    if (game == NULL)
-        return;
-
     // Player
     Car* car = &game->car;
     Obstacle* obs = &game->obstacle;
@@ -109,16 +100,10 @@ void GameUpdate(Game* game)
 
 void GameRender(const Game* game)
 {
-    if (game == NULL)
-        return;
-
     RenderFrame(game, GetScreenWidth(), GetScreenHeight());
 }
 
 void GameQuit(Game* game)
 {
-    if (game == NULL)
-        return;
-
     UnloadAllAssets(game);
 }

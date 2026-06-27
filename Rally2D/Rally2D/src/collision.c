@@ -9,41 +9,26 @@
 
 static inline int CarWidth(const Car* car)
 {
-    if (car == NULL)
-        return false;
-
     return car->sheet.frames ? car->sheet.frames[0].width : PLAYER_WIDTH;
 }
 
 static inline int CarHeight(const Car* car)
 {
-    if (car == NULL)
-        return false;
-
     return car->sheet.frames ? car->sheet.frames[0].height : PLAYER_HEIGHT;
 }
 
 static inline int ObstWidth(const Obstacle* o)
 {
-    if (o == NULL)
-        return false;
-
     return o->sheet.frames ? o->sheet.frames[0].width : OBSTACLE_WIDTH;
 }
 
 static inline int ObstHeight(const Obstacle* o)
 {
-    if (o == NULL)
-        return false;
-
     return o->sheet.frames ? o->sheet.frames[0].height : OBSTACLE_HEIGHT;
 }
 
 int CheckCenterPoint(const Car* car, const Obstacle* obstacle)
 {
-    if (car == NULL || obstacle == NULL)
-        return false;
-
     float cx = obstacle->pos.x + (float)ObstWidth(obstacle) * 0.5f;
     float cy = obstacle->pos.y + (float)ObstHeight(obstacle) * 0.5f;
 
@@ -57,9 +42,6 @@ int CheckCenterPoint(const Car* car, const Obstacle* obstacle)
 
 int CheckAABB(const Car* car, const Obstacle* obstacle)
 {
-    if (car == NULL || obstacle == NULL)
-        return false;
-
     float carL = car->pos.x;
     float carR = car->pos.x + (float)CarWidth(car);
     float carT = car->pos.y;
@@ -80,17 +62,11 @@ int CheckAABB(const Car* car, const Obstacle* obstacle)
 
 int ObstacleExited(const Obstacle* obstacle, int screenH)
 {
-    if (obstacle == NULL)
-        return false;
-
     return obstacle->pos.y > (float)(screenH + ObstHeight(obstacle));
 }
 
 void ResetObstacle(Obstacle* obstacle, int screenW)
 {
-    if (obstacle == NULL)
-        return;
-
     int ow = ObstWidth(obstacle);
     int oh = ObstHeight(obstacle);
 
@@ -107,9 +83,6 @@ void ResetObstacle(Obstacle* obstacle, int screenW)
 
 void ResolveCollision(Car* car, Obstacle* obstacle, int screenW)
 {
-    if (car == NULL || obstacle == NULL)
-        return;
-
     car->energy--;
 
     car->velocity -= (float)BRAKING_SPEED;

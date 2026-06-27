@@ -7,9 +7,6 @@
 
 void HandleInput(Game* game)
 {
-    if (game == NULL)
-        return;
-
     if (IsKeyPressed(KEY_ESCAPE)) {
         game->state = STATE_QUIT;
         return;

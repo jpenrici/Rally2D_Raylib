@@ -7,9 +7,6 @@
 
 void LoadAllAssets(Game* game, int screenW, int screenH)
 {
-    if (game == NULL)
-        return;
-
     // Background
     game->background.texture = LoadTexture(BG_PATH);
     game->background.loaded = (game->background.texture.id != 0);
@@ -40,9 +37,6 @@ void LoadAllAssets(Game* game, int screenW, int screenH)
 
 void UnloadAllAssets(Game* game)
 {
-    if (game == NULL)
-        return;
-
     // Standalone textures
     if (game->background.loaded)
         UnloadTexture(game->background.texture);

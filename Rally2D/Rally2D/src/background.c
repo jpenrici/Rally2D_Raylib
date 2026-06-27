@@ -7,17 +7,11 @@
 
 void InitScroll(ScrollBackground* bg)
 {
-    if (bg == NULL)
-        return;
-
     bg->scrollOffset = 0.0f;
 }
 
 void UpdateScroll(ScrollBackground* bg, float speed)
 {
-    if (bg == NULL)
-        return;
-
     bg->scrollOffset += speed;
 
     float wrapAt = bg->loaded ? bg->texture.height : SCREEN_WIDTH;
@@ -29,9 +23,6 @@ void UpdateScroll(ScrollBackground* bg, float speed)
 
 void DrawBackground(const ScrollBackground* bg, int screenW, int screenH)
 {
-    if (bg == NULL)
-        return;
-
     if (!bg->loaded) {
         DrawRectangle(0, 0, screenW, screenH, DARKGRAY);
 
