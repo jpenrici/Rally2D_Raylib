@@ -8,7 +8,7 @@ This is not a complete game.
 
 ## Display
 
-TO DO
+![Game](https://github.com/jpenrici/Raylib_Games_Experiments/blob/main/ConnectDots/display/display.png)
 
 ## Learn more:
 
