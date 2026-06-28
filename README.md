@@ -1,6 +1,6 @@
 # Raylib_Games_Experiments
 
-Experience with Raylib in C.
+Experience with Raylib.
 
 ## Learn more:
 
