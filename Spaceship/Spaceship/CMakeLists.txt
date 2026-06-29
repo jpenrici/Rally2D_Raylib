@@ -11,11 +11,18 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+option(AUDIO_MUTED "Silence all audio (useful during development/testing)" OFF)
+
 find_package(raylib REQUIRED QUIET)
 
 set(SOURCES src/main.c)
 
 add_executable(${PROGRAM_NAME} ${SOURCES})
+
+if(AUDIO_MUTED)
+  target_compile_definitions(${PROGRAM_NAME} PRIVATE AUDIO_MUTED)
+  message(STATUS "AUDIO_MUTED: audio disabled for this build")
+endif()
 
 target_link_libraries(
   ${PROGRAM_NAME}
@@ -36,4 +43,5 @@ add_custom_command(
     $<TARGET_FILE_DIR:${PROGRAM_NAME}>/resources
   COMMENT "Copyng resources...")
 
-add_compile_options(-Wall -Wextra -Wpedantic -Wconversion)
+target_compile_options(${PROGRAM_NAME} PRIVATE -Wall -Wextra -Wpedantic
+                                               -Wconversion)
