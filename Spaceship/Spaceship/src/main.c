@@ -88,18 +88,18 @@
 // ---------------------------------------------------------------------------
 
 typedef struct {
-    int srcX; // source X offset inside the texture (pixels)
-    int srcY; // source Y offset inside the texture (pixels)
-    int srcW; // source rectangle width
-    int srcH; // source rectangle height
-    int width; // image width
-    int height; // image height
+    unsigned srcX; // source X offset inside the texture (pixels)
+    unsigned srcY; // source Y offset inside the texture (pixels)
+    unsigned srcW; // source rectangle width
+    unsigned srcH; // source rectangle height
+    unsigned width; // image width
+    unsigned height; // image height
 } Sprite;
 
 typedef struct {
     Texture2D texture; // image with the Sprites
     Sprite* frames; // array of [rows * cols] Sprite values
-    int count; // total number of frames (rows * cols)
+    unsigned count; // total number of frames (rows * cols)
     bool loaded; // if false, use fallback shape
 } SpriteSheet;
 
@@ -113,7 +113,8 @@ typedef struct {
     SpriteSheet sheet;
     Vector2 pos;
     float angle;
-    int energy;
+    unsigned energy;
+    unsigned frame;
 } Player;
 
 typedef struct {
@@ -121,12 +122,15 @@ typedef struct {
     Vector2 pos;
     float angle;
     float scale;
+    unsigned frame;
+    unsigned animTimer;
 } Bullet;
 
 typedef struct {
     SpriteSheet sheet;
     Vector2 pos;
     float angle;
+    unsigned frame;
 } Obstacle;
 
 typedef struct {
@@ -135,7 +139,7 @@ typedef struct {
     int hits;
     int shots;
     int collisions;
-    int energy;
+    unsigned energy;
 } HUD;
 
 typedef struct {
@@ -153,7 +157,7 @@ typedef enum {
 
 typedef struct {
     Player spaceship;
-    Obstacle meteor;
+    Obstacle* meteors; // array
     ScrollBackground background;
     Hud hud;
     Image gameOver;
@@ -167,15 +171,16 @@ typedef struct {
 static void GameInit(Game* game);
 static void GameHandleInput(Game* game);
 static void GameUpdate(Game* game);
+static void GamePlay(Game* game);
 static void GameRender(const Game* game);
 static void GameCheckCollisions(Game* game);
 static void GameQuit(Game* game);
 
-void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols, int frameW, int frameH);
-void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y);
-void DrawSpriteFallback(const SpriteSheet* sheet, int frame, float x, float y, Color color);
-void AnimateSprite(int* frame, int* timer, int firstFrame, int lastFrame, int ticksPerFrame);
-void ResizeSprite(SpriteSheet* sheet, int newW, int newH);
+void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols, unsigned frameW, unsigned frameH);
+void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y);
+void DrawSpriteFallback(const SpriteSheet* sheet, unsigned frame, float x, float y, Color color);
+void AnimateSprite(unsigned* frame, int* timer, unsigned firstFrame, unsigned lastFrame, int ticksPerFrame);
+void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH);
 void UnloadSheet(SpriteSheet* sheet);
 
 void LoadAllAssets(Game* game, int screenW, int screenH);
@@ -242,7 +247,9 @@ static void GameInit(Game* game)
     Player* spaceship = &game->spaceship;
 
     // Obstacle
+
     // Bullet
+
     // GameOver
 
     // Fonts
@@ -305,10 +312,8 @@ static void GameHandleInput(Game* game)
 
 static void GameUpdate(Game* game)
 {
-    // Game Check Collisions
-
-    // Move target (Mouse position)
-    // Change player (angle)
+    // Gameplay - Rules
+    // HUD
 }
 
 static void GameRender(const Game* game)
@@ -316,10 +321,24 @@ static void GameRender(const Game* game)
     // Playing area background
 
     // Objects
+    // Drawing set of obstacles
+
+    // Draw bullet if fired.
+
+    // Draw Player and trigger
+
     // DrawHud(game);
 
     if (game->state == STATE_PAUSE)
         DrawOverlay("PAUSED  [P to resume]", (Color) { 0, 0, 0, 160 }, RAYWHITE);
+}
+
+static void GamePlay(Game* game)
+{
+    // Move Player (x,y) and angle (rotation)
+    // Check trigger
+    // Move main obstacles and extras.
+    // Check collisions
 }
 
 static void GameQuit(Game* game)
@@ -331,15 +350,119 @@ static void GameQuit(Game* game)
 // Helpers
 // ---------------------------------------------------------------------------
 
-void PrepareSheet(SpriteSheet* sheet, const char* path, int rows, int cols, int frameW, int frameH);
-void DrawSprite(const SpriteSheet* sheet, int frame, float x, float y);
-void DrawSpriteFallback(const SpriteSheet* sheet, int frame, float x, float y, Color color);
-void AnimateSprite(int* frame, int* timer, int firstFrame, int lastFrame, int ticksPerFrame);
-void ResizeSprite(SpriteSheet* sheet, int newW, int newH);
-void UnloadSheet(SpriteSheet* sheet);
+void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols,
+    unsigned frameW, unsigned frameH)
+{
+    unsigned count = rows * cols;
 
-void LoadAllAssets(Game* game, int screenW, int screenH);
-void UnloadAllAssets(Game* game);
+    sheet->frames = (Sprite*)malloc(sizeof(Sprite) * (size_t)count);
+    sheet->count = count;
+
+    if (sheet->frames == NULL) {
+        fprintf(stderr, "[sprite] malloc failed fo %s\n", path);
+        sheet->loaded = false;
+        return;
+    }
+
+    unsigned idx = 0;
+    for (unsigned i = 0; i < rows; ++i) {
+        for (unsigned j = 0; j < cols; ++j) {
+            Sprite* s = &sheet->frames[idx++];
+            s->srcX = j * frameW;
+            s->srcY = i * frameH;
+            s->srcW = frameW;
+            s->srcH = frameH;
+            s->width = frameW;
+            s->height = frameH;
+        }
+    }
+
+    sheet->texture = LoadTexture(path);
+    sheet->loaded = (sheet->texture.id != 0);
+
+    if (!sheet->loaded) {
+        fprintf(stderr, "[sprite] could not load texture: %s\n", path);
+    }
+}
+
+void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y)
+{
+    if (frame >= sheet->count)
+        return;
+
+    if (!sheet->loaded)
+        return;
+
+    const Stripe* s = &sheet->frames[frame];
+
+    Rectangle src = { (int)s->srcX, (int)s->srcY, (float)s->srcW, (float)s->srcH };
+    Rectangle dst = { x, y, (float)s->width, (float)s->height };
+
+    Vector2 origin = { 0.0f, 0.0f };
+
+    DrawTexturePro(sheet->texture, src, dst, origin, 0.0f, WHITE);
+}
+
+void DrawSpriteFallback(const SpriteSheet* sheet, unsigned frame, float x, float y, Color color)
+{
+    if (frame >= sheet->count)
+        return;
+
+    const Sprite* s = &sheet->frames[frame];
+
+    DrawRectangle((int)x, (int)y, s->width, s->height, color);
+    DrawRectangleLines((int)x, (int)y, s->width, s->height, BLACK);
+}
+
+void AnimateSprite(unsigned* frame, int* timer, unsigned firstFrame, unsigned lastFrame, int ticksPerFrame)
+{
+    (*timer)++;
+
+    if (*timer > ticksPerFrame) {
+        *timer = 0;
+        (*frame)++;
+
+        if (*frame > lastFrame) {
+            *frame = firstFrame;
+        }
+    }
+}
+
+void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH)
+{
+    for (unsigned i = 0; i < sheet->count; i++) {
+        if (newW > 0)
+            sheet->frames[i].width = newW;
+        if (newH > 0)
+            sheet->frames[i].height = newH;
+    }
+}
+
+void UnloadSheet(SpriteSheet* sheet)
+{
+    free(sheet->frames);
+    sheet->frames = NULL;
+    sheet->count = 0;
+
+    if (sheet->loaded) {
+        UnloadTexture(sheet->texture);
+        sheet->loaded = false;
+    }
+}
+
+void LoadAllAssets(Game* game, int screenW, int screenH)
+{
+    // Player
+    PrepareSheet(&game->spaceship.sheet, PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+    // Obstacle - Meteor
+    // prepare a meteor
+}
+
+void UnloadAllAssets(Game* game)
+{
+    // Destroy all objects.
+}
 
 void InitScroll(ScrollBackground* bg);
 void UpdateScroll(ScrollBackground* bg, float speed);
@@ -352,4 +475,33 @@ static void DrawPlayerHud(Game* game);
 static void DrawBullet(Game* game);
 static void DrawObstacle(Game* game);
 static void DrawHud(Game* game);
-static void DrawGameOver(const Game* game, int screeWidth, int screenHeight);
+
+static void DrawGameOver(const Game* game, int screeWidth, int screenHeight)
+{
+    if (game->gameOver.imageLoaded) {
+        float x = (float)(screenW - gameOver.texture.width) * 0.5f;
+        float y = (float)(screenH - gameOver.texture.height) * 0.5f;
+        DrawTexture(game->gameOver.texture, (int)x, (int)y, WHITE);
+    } else {
+        int pw = 360, ph = 120;
+        int px = (screenW - pw) / 2;
+        int py = (screenH - ph) / 2;
+
+        DrawRectangle(px, py, pw, ph, BLACK);
+        DrawRectangleLines(px, py, pw, ph, RED);
+
+        const char* msg = "GAME OVER";
+        const char* hint = "Press SPACE to restart";
+        int fontSize = 48;
+        int hintSize = 20;
+
+        DrawText(msg,
+            px + (pw - MeasureText(msg, fontSize)) / 2,
+            py + 18,
+            fontSize, RED);
+        DrawText(hint,
+            px + (pw - MeasureText(hint, hintSize)) / 2,
+            py + ph - hintSize - 14,
+            hintSize, LIGHTGRAY);
+    }
+}
