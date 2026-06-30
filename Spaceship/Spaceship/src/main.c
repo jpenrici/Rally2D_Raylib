@@ -1,8 +1,15 @@
 /*
  * A simple spaceship game.
  *
+ * Controls:
+ * WASD or Arrow keys move the spaceship
+ * Spacebar shoots
+ * N restarts after time runs out
+ * ESC exits the game
+ *
  * Build-time flags:
- *   -DAUDIO_MUTED   silence all audio (development / CI)
+ *   -DAUDIO_MUTED  silence all audio (development / CI)
+ *   -DONLY_SHAPE   hide image if loaded (development / CI)
  */
 
 #include "raylib.h"
@@ -26,6 +33,15 @@
 #define PLAY_MUSIC(mus) PlayMusicStream(mus)
 #define UPDATE_MUSIC(mus) UpdateMusicStream(mus)
 #define STOP_MUSIC(mus) StopMusicStream(mus)
+#endif
+
+// ---------------------------------------------------------------------------
+// Graphics
+// ---------------------------------------------------------------------------
+#ifdef ONLY_SHAPE
+#define HIDDEN_IMAGE true
+#else
+#define HIDDEN_IMAGE false
 #endif
 
 // ---------------------------------------------------------------------------
@@ -54,7 +70,7 @@
 #define PLAYER_ENERGY_MAX 10
 
 // Bullet  (sheet: 1 row × 2 cols, 127×127 px each)
-//   frame 0 = projectile,  frame 1 = explosion
+// frame 0 = projectile,  frame 1 = explosion
 #define BULLET_PATH "resources/images/bullet.png"
 #define BULLET_WIDTH 127
 #define BULLET_HEIGHT 127
@@ -68,7 +84,7 @@
 #define BULLET_EXPLODE_TICKS 20 // frames the explosion stays visible
 
 // Meteor  (sheet: 1 row × 2 cols, 96×96 px each)
-//   frame 0 = red/target,  frame 1 = grey/distant
+// frame 0 = red/target,  frame 1 = grey/distant
 #define OBSTACLE_PATH "resources/images/meteor.png"
 #define OBSTACLE_WIDTH 96
 #define OBSTACLE_HEIGHT 96
@@ -91,7 +107,7 @@
 #define GAMEOVER_PATH "resources/images/gameOver.png"
 
 // Fallback colors
-#define COLOR_PLAYER_FALLBACK ((Color) { 220, 50, 50, 255 })
+#define COLOR_PLAYER_FALLBACK ((Color) { 202, 14, 227, 255 })
 #define COLOR_BULLET_FALLBACK ((Color) { 0, 200, 80, 255 })
 #define COLOR_TARGET_FALLBACK ((Color) { 180, 40, 40, 255 })
 #define COLOR_DISTANT_FALLBACK ((Color) { 100, 100, 100, 180 })
@@ -202,9 +218,8 @@ typedef struct {
     SpriteSheet meteorSheet; // ONE texture for both layers
 
     ScrollBackground background;
+
     HUD hud;
-    GameOverImage gameOver;
-    GameState state;
     Font font;
     bool fontLoaded;
     Music music;
@@ -212,6 +227,9 @@ typedef struct {
     Sound sfxExplosion;
     Sound sfxAlert;
     bool audioLoaded;
+
+    GameOverImage gameOver;
+    GameState state;
 } Game;
 
 // ---------------------------------------------------------------------------
@@ -413,7 +431,7 @@ static void GameHandleInput(Game* game)
     if (IsKeyPressed(KEY_Q))
         game->state = STATE_QUIT;
 
-    if (game->state == STATE_GAMEOVER && IsKeyPressed(KEY_SPACE))
+    if (game->state == STATE_GAMEOVER && IsKeyPressed(KEY_N))
         GameInit(game, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     if (game->state != STATE_PLAYING)
@@ -589,11 +607,15 @@ static void GameCheckCollisions(Game* game)
 // Helper: draw a meteor from the shared sheet at a specific fixed frame,
 // with per-instance position, rotation, and custom display size.
 static void DrawMeteor(const SpriteSheet* sheet, unsigned fixedFrame,
-    float x, float y, float angle,
-    unsigned dispW, unsigned dispH, Color tint)
+    float x, float y, float angle, unsigned dispW, unsigned dispH, Color tint)
 {
-    if (!sheet->loaded || fixedFrame >= sheet->count)
+    if (fixedFrame >= sheet->count)
         return;
+
+    if (!sheet->loaded || HIDDEN_IMAGE) {
+        DrawSpriteFallback(sheet, 0, x, y, fixedFrame == 0 ? COLOR_TARGET_FALLBACK : COLOR_DISTANT_FALLBACK);
+        return;
+    }
 
     const Sprite* s = &sheet->frames[fixedFrame];
     float hw = (float)dispW / 2.0f;
@@ -634,13 +656,13 @@ static void GameRender(const Game* game)
     // 4a) Bullet
     const Bullet* b = &game->bullet;
     if (b->state == BULLET_FLYING) {
-        if (b->sheet.loaded)
+        if (b->sheet.loaded && !HIDDEN_IMAGE)
             DrawSprite(&b->sheet, BULLET_FRAME_NORMAL, b->pos.x, b->pos.y);
         else
             DrawSpriteFallback(&b->sheet, BULLET_FRAME_NORMAL,
                 b->pos.x, b->pos.y, COLOR_BULLET_FALLBACK);
     } else if (b->state == BULLET_EXPLODING) {
-        if (b->sheet.loaded)
+        if (b->sheet.loaded && !HIDDEN_IMAGE)
             DrawSprite(&b->sheet, BULLET_FRAME_EXPLODE, b->pos.x, b->pos.y);
         else
             DrawSpriteFallback(&b->sheet, BULLET_FRAME_EXPLODE,
@@ -648,7 +670,7 @@ static void GameRender(const Game* game)
     }
 
     // 4b) Player spaceship
-    if (game->spaceship.sheet.loaded)
+    if (game->spaceship.sheet.loaded && !HIDDEN_IMAGE)
         DrawSprite(&game->spaceship.sheet, game->spaceship.frame,
             game->spaceship.pos.x, game->spaceship.pos.y);
     else
@@ -667,7 +689,7 @@ static void GameRender(const Game* game)
 
     // Bottom hint bar
     DrawRectangle(0, SCREEN_HEIGHT - 24, SCREEN_WIDTH, 24, (Color) { 0, 0, 0, 180 });
-    DrawText("Use WASD or arrows to move, Space to shot and Esc to pause.",
+    DrawText("Use WASD or arrows to move, Space to shot and P to pause.",
         10, SCREEN_HEIGHT - 19, 14, LIGHTGRAY);
 
     EndDrawing();
@@ -723,7 +745,7 @@ static void DrawHud(const Game* game)
 
 static void DrawGameOver(const Game* game, int screenW, int screenH)
 {
-    if (game->gameOver.imageLoaded) {
+    if (game->gameOver.imageLoaded && !HIDDEN_IMAGE) {
         int x = (screenW - game->gameOver.texture.width) / 2;
         int y = (screenH - game->gameOver.texture.height) / 2;
         DrawTexture(game->gameOver.texture, x, y, WHITE);
@@ -733,7 +755,7 @@ static void DrawGameOver(const Game* game, int screenW, int screenH)
         DrawRectangle(px, py, pw, ph, (Color) { 0, 0, 0, 200 });
         DrawRectangleLines(px, py, pw, ph, RED);
         const char* msg = "GAME OVER";
-        const char* hint = "Press SPACE to restart";
+        const char* hint = "Press N for a new game";
         DrawText(msg, px + (pw - MeasureText(msg, 48)) / 2, py + 18, 48, RED);
         DrawText(hint, px + (pw - MeasureText(hint, 20)) / 2, py + ph - 34, 20, LIGHTGRAY);
     }
@@ -780,7 +802,7 @@ void UpdateScroll(ScrollBackground* bg, float speed)
 
 void DrawScrollBackground(const ScrollBackground* bg)
 {
-    if (!bg->loaded) {
+    if (!bg->loaded || HIDDEN_IMAGE) {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, (Color) { 10, 10, 30, 255 });
         return;
     }

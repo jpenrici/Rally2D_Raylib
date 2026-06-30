@@ -12,6 +12,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 option(AUDIO_MUTED "Silence all audio (useful during development/testing)" OFF)
+option(ONLY_SHAPE "Hide images if loaded (useful during development/testing)"
+       OFF)
 
 find_package(raylib REQUIRED QUIET)
 
@@ -22,6 +24,11 @@ add_executable(${PROGRAM_NAME} ${SOURCES})
 if(AUDIO_MUTED)
   target_compile_definitions(${PROGRAM_NAME} PRIVATE AUDIO_MUTED)
   message(STATUS "AUDIO_MUTED: audio disabled for this build")
+endif()
+
+if(ONLY_SHAPE)
+  target_compile_definitions(${PROGRAM_NAME} PRIVATE ONLY_SHAPE)
+  message(STATUS "ONLY_SHAPE: images disabled for this build")
 endif()
 
 target_link_libraries(
