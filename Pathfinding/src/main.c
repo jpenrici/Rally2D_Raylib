@@ -17,14 +17,39 @@
 #define CELL_HEIGHT ((SCREEN_HEIGHT - HUD_HEIGHT) / ROWS)
 #define CELL_WIDTH (SCREEN_WIDTH / COLS)
 
+// Player
+#define PLAYER_PATH "assets/player.png"
+#define PLAYER_WIDTH 64
+#define PLAYER_HEIGHT 64
+#define PLAYER_ROWS 1
+#define PLAYER_COLS 4
+
 // Enemy
+#define ENEMY_PATH "assets/enemy.png"
+#define ENEMY_WIDTH 64
+#define ENEMY_HEIGHT 64
+#define ENEMY_ROWS 1
+#define ENEMY_COLS 4
+
 #define FRAMES_COUNTER 20 // Throttle Enemy movement speed
 
 // Bonus
+#define BONUS_PATH "assets/bonus.png"
+#define BONUS_WIDTH 64
+#define BONUS_HEIGHT 64
+#define BONUS_ROWS 1
+#define BONUS_COLS 1
+
 #define MIN_BONUS 5
 #define MAX_BONUS 15
 
 // Obstacles
+#define OBST_PATH "assets/obstacles.png"
+#define OBST_WIDTH 64
+#define OBST_HEIGHT 64
+#define OBST_ROWS 1
+#define OBST_COLS 3
+
 #define MIN_OBST 25
 #define MAX_OBST 50
 
@@ -37,11 +62,35 @@
 #define COLOR_GRID DARKGRAY
 
 // Structures
+typedef struct {
+    int srcX; // source X offset inside the texture (pixels)
+    int srcY; // source Y offset inside the texture (pixels)
+    int srcW; // source rectangle width
+    int srcH; // source rectangle height
+    int width; // image width
+    int height; // image height
+} Sprite;
+
+typedef struct {
+    Texture2D texture; // image with the Sprites
+    Sprite* frames; // array of [rows * cols] Sprite values
+    int count; // total number of frames (rows * cols)
+    bool loaded; // if false, use fallback shape
+} SpriteSheet;
+
 typedef enum {
     CELL_EMPTY,
     CELL_BONUS,
     CELL_OBSTACLE
 } CellKind;
+
+typedef struct {
+    SpriteSheet sheet;
+    bool still; // non-animated image chosen from the available sprite options
+    int animTimer; // counts frames before advancing the animation
+    int frame; // current animation or image frame index
+    CellKind cellKing;
+} Entity;
 
 typedef enum {
     UP,
@@ -72,6 +121,7 @@ typedef struct {
     int total_bonus;
     int total_obstacles;
 
+    Entity entity[4]; // 0 - Player, 1 - Enemy, 2 - Bonus and 3 - Obstacle
     GameState state;
 
     int hits;
@@ -95,6 +145,16 @@ static void GameHandleInput(Game* game);
 static void GameUpdate(Game* game);
 static void GameRender(const Game* game);
 static void GamePlay(Game* game);
+
+void LoadAllAssets(Game* game);
+void UnloadAllAssets(Game* game);
+
+static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols,
+    unsigned frameW, unsigned frameH);
+
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y);
+static void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH);
+static void UnloadSheet(SpriteSheet* sheet);
 
 static void DrawCell(int x, int y, Color c);
 static void DrawGRID(void);
@@ -192,13 +252,13 @@ static void GameHandleInput(Game* game)
     // Grid-based Player Movement Input.
     Point next = game->player;
 
-    if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP))
+    if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP))
         next.y--;
-    else if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN))
+    else if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN))
         next.y++;
-    else if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT))
+    else if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
         next.x--;
-    else if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT))
+    else if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
         next.x++;
 
     if (IsWalkable(game, next.x, next.y)) {
@@ -281,6 +341,99 @@ static void GameRender(const Game* game)
         DrawHUD(game);
     }
     EndDrawing();
+}
+
+void LoadAllAssets(Game* game)
+{
+    // Player
+    PrepareSheet(&game->entity[0].sheet, PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_WIDTH);
+    ResizeSprite(&game->entity[0].sheet, CELL_WIDTH, CELL_HEIGHT);
+
+    // Enemy
+    PrepareSheet(&game->entity[1].sheet, ENEMY_PATH, ENEMY_ROWS, ENEMY_COLS, ENEMY_WIDTH, ENEMY_HEIGHT);
+    ResizeSprite(&game->entity[1].sheet, CELL_WIDTH, CELL_HEIGHT);
+
+    // Bonus
+    PrepareSheet(&game->entity[2].sheet, BONUS_PATH, BONUS_ROWS, BONUS_COLS, BONUS_WIDTH, BONUS_HEIGHT);
+    ResizeSprite(&game->entity[2].sheet, CELL_WIDTH, CELL_HEIGHT);
+
+    // Obstacle
+    PrepareSheet(&game->entity[3].sheet, OBST_PATH, OBST_ROWS, OBST_COLS, OBST_WIDTH, OBST_HEIGHT);
+    ResizeSprite(&game->entity[3].sheet, CELL_WIDTH, CELL_HEIGHT);
+}
+
+void UnloadAllAssets(Game* game)
+{
+    for (unsigned i = 0; i < 4; ++i) {
+        UnloadSheet(&game->entity[i].sheet);
+    }
+}
+
+static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols,
+    unsigned frameW, unsigned frameH)
+{
+    unsigned count = rows * cols;
+    sheet->frames = (Sprite*)malloc(sizeof(Sprite) * (size_t)count);
+    sheet->count = count;
+    sheet->loaded = false;
+
+    if (!sheet->frames) {
+        fprintf(stderr, "[sprite] malloc failed for %s\n", path);
+        return;
+    }
+
+    unsigned idx = 0;
+    for (unsigned r = 0; r < rows; ++r) {
+        for (unsigned c = 0; c < cols; ++c) {
+            Sprite* s = &sheet->frames[idx++];
+            s->srcX = c * frameW;
+            s->srcY = r * frameH;
+            s->srcW = frameW;
+            s->srcH = frameH;
+            s->width = frameW;
+            s->height = frameH;
+        }
+    }
+
+    sheet->texture = LoadTexture(path);
+    sheet->loaded = (sheet->texture.id != 0);
+    if (!sheet->loaded)
+        fprintf(stderr, "[sprite] could not load: %s\n", path);
+}
+
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y)
+{
+    if (!sheet->loaded || frame >= sheet->count)
+        return;
+
+    const Sprite* s = &sheet->frames[frame];
+    Rectangle src = { (float)s->srcX, (float)s->srcY, (float)s->srcW, (float)s->srcH };
+    Rectangle dst = { x, y, (float)s->width, (float)s->height };
+    DrawTexturePro(sheet->texture, src, dst, (Vector2) { 0.0f, 0.0f }, 0.0f, WHITE);
+}
+
+static void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH)
+{
+    for (unsigned i = 0; i < sheet->count; ++i) {
+        if (newW > 0)
+            sheet->frames[i].width = newW;
+        if (newH > 0)
+            sheet->frames[i].height = newH;
+    }
+}
+
+static void UnloadSheet(SpriteSheet* sheet)
+{
+    if (sheet->frames) {
+        free(sheet->frames);
+        sheet->frames = NULL;
+    }
+
+    sheet->count = 0;
+    if (sheet->loaded) {
+        UnloadTexture(sheet->texture);
+        sheet->loaded = false;
+    }
 }
 
 static void DrawCell(int x, int y, Color c)
