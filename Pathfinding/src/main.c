@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 // Window
 #define SCREEN_TITLE "Game"
@@ -18,24 +17,31 @@
 #define CELL_HEIGHT ((SCREEN_HEIGHT - HUD_HEIGHT) / ROWS)
 #define CELL_WIDTH (SCREEN_WIDTH / COLS)
 
+// Enemy
+#define FRAMES_COUNTER 20 // Throttle Enemy movement speed
+
+// Bonus
+#define MIN_BONUS 5
+#define MAX_BONUS 15
+
 // Obstacles
-#define MIN_NUM 25
-#define MAX_NUM 50
+#define MIN_OBST 25
+#define MAX_OBST 50
 
 // Colors
-#define COLOR_BACKGROUND DARKGRAY
-#define COLOR_OBSTACLE RED
 #define COLOR_PLAYER BLUE
 #define COLOR_ENEMY GOLD
+#define COLOR_BONUS GREEN
+#define COLOR_OBSTACLE RED
+#define COLOR_BACKGROUND DARKBROWN
 #define COLOR_GRID DARKGRAY
 
 // Structures
 typedef enum {
-    PLAYER,
-    ENEMY,
-    OBSTACLE,
-    UNDEFINED
-} EntityKind;
+    CELL_EMPTY,
+    CELL_BONUS,
+    CELL_OBSTACLE
+} CellKind;
 
 typedef enum {
     UP,
@@ -46,25 +52,29 @@ typedef enum {
 } Direction;
 
 typedef struct {
-    Vector2 position; // Grid coordinates (0 to COLS-1, 0 to ROWS-1)
-    EntityKind kind;
-    bool solid;
-    int id;
-} Entity;
+    int x;
+    int y;
+} Point;
 
 typedef enum {
     STATE_RUNNING,
     STATE_PAUSE,
+    STATE_WIN,
     STATE_GAME_OVER,
     STATE_QUIT
 } GameState;
 
 typedef struct {
-    Entity player;
-    Entity enemy;
-    Entity* obstacles;
+    Point player;
+    Point enemy;
+
+    CellKind map[COLS][ROWS];
+    int total_bonus;
     int total_obstacles;
+
     GameState state;
+
+    int hits;
     int score;
     int frames_counter; // Used to throttle enemy movement speed
 } Game;
@@ -85,15 +95,16 @@ static void GameHandleInput(Game* game);
 static void GameUpdate(Game* game);
 static void GameRender(const Game* game);
 static void GamePlay(Game* game);
-static void GameQuit(Game* game);
 
-static void DrawEntity(const Entity* e, Color c);
+static void DrawCell(int x, int y, Color c);
 static void DrawGRID(void);
 static void DrawHUD(const Game* game);
 
-static bool CheckCollision(const Entity* e1, const Entity* e2);
-static bool IsCellOccupiedByObstacle(const Game* game, int x, int y);
-static Direction Pathfinding(const Game* game, const Entity* start_entity, const Entity* target_entity);
+static bool IsInBounds(int x, int y);
+static bool IsWalkable(const Game* game, int x, int y);
+static bool IsOccupied(const Game* game, int x, int y);
+static Point RandomEmptyCell(const Game* game);
+static Direction Pathfinding(const Game* game, Point start, Point target);
 
 // Main Entry Point
 int main(void)
@@ -115,75 +126,48 @@ int main(void)
         GameRender(&game);
     }
 
-    GameQuit(&game);
     CloseWindow();
-
     return 0;
 }
 
 static void GameInit(Game* game)
 {
+    game->state = STATE_RUNNING;
+
+    game->hits = 0;
     game->score = 0;
     game->frames_counter = 0;
 
-    // Allocate and clear obstacle array safely
-    if (game->obstacles != NULL) {
-        free(game->obstacles);
-        game->obstacles = NULL;
-    }
-
-    // Set Random Player Position (Safe within bounds: 0 to COLS-1)
-    Entity* p = &game->player;
-    p->kind = PLAYER;
-    p->solid = true;
-    p->position = (Vector2) { (float)GetRandomValue(0, COLS - 1), (float)GetRandomValue(0, ROWS - 1) };
-    p->id = 1;
-
-    // Set Random Enemy Position (Ensuring it does not spawn on top of the player)
-    Entity* e = &game->enemy;
-    e->kind = ENEMY;
-    e->solid = true;
-    e->id = 2;
-    do {
-        e->position = (Vector2) { (float)GetRandomValue(0, COLS - 1), (float)GetRandomValue(0, ROWS - 1) };
-    } while (e->position.x == p->position.x && e->position.y == p->position.y);
-
-    // Generate Random Obstacles
-    game->total_obstacles = GetRandomValue(MIN_NUM, MAX_NUM);
-    game->obstacles = malloc(sizeof(Entity) * game->total_obstacles);
-
-    if (game->obstacles) {
-        for (int i = 0; i < game->total_obstacles; ++i) {
-            Entity o;
-            o.kind = OBSTACLE;
-            o.solid = true;
-            o.id = i + 10;
-
-            // Loop until a unique empty cell is found
-            while (true) {
-                o.position = (Vector2) { (float)GetRandomValue(0, COLS - 1), (float)GetRandomValue(0, ROWS - 1) };
-
-                // Do not block Player or Enemy starting points
-                if ((o.position.x == p->position.x && o.position.y == p->position.y) || (o.position.x == e->position.x && o.position.y == e->position.y)) {
-                    continue;
-                }
-
-                // Check if this cell already has an obstacle
-                bool overlap = false;
-                for (int j = 0; j < i; ++j) {
-                    if (game->obstacles[j].position.x == o.position.x && game->obstacles[j].position.y == o.position.y) {
-                        overlap = true;
-                        break;
-                    }
-                }
-                if (!overlap)
-                    break;
-            }
-            game->obstacles[i] = o;
+    // Clear the map
+    for (int x = 0; x < COLS; x++) {
+        for (int y = 0; y < ROWS; y++) {
+            game->map[x][y] = CELL_EMPTY;
         }
     }
 
-    game->state = STATE_RUNNING;
+    // Random Player Position
+    game->player.x = GetRandomValue(0, COLS - 1);
+    game->player.y = GetRandomValue(0, ROWS - 1);
+
+    // Random Enemy Position
+    do {
+        game->enemy.x = GetRandomValue(0, COLS - 1);
+        game->enemy.y = GetRandomValue(0, ROWS - 1);
+    } while (game->enemy.x == game->player.x && game->enemy.y == game->player.y);
+
+    // Place Bonus
+    game->total_bonus = GetRandomValue(MIN_BONUS, MAX_BONUS);
+    for (int i = 0; i < game->total_bonus; i++) {
+        Point p = RandomEmptyCell(game);
+        game->map[p.x][p.y] = CELL_BONUS;
+    }
+
+    // Place Obstacles
+    game->total_obstacles = GetRandomValue(MIN_OBST, MAX_OBST);
+    for (int i = 0; i < game->total_obstacles; i++) {
+        Point p = RandomEmptyCell(game);
+        game->map[p.x][p.y] = CELL_OBSTACLE;
+    }
 }
 
 static void GameHandleInput(Game* game)
@@ -205,23 +189,20 @@ static void GameHandleInput(Game* game)
     if (game->state != STATE_RUNNING)
         return;
 
-    // Grid-based Player Movement Input (Includes collision check with solid obstacles)
-    Vector2 next_pos = game->player.position;
+    // Grid-based Player Movement Input.
+    Point next = game->player;
 
     if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP))
-        next_pos.y--;
-    if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN))
-        next_pos.y++;
-    if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT))
-        next_pos.x--;
-    if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT))
-        next_pos.x++;
+        next.y--;
+    else if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN))
+        next.y++;
+    else if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT))
+        next.x--;
+    else if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT))
+        next.x++;
 
-    // Map boundary constraint validation
-    if (next_pos.x >= 0 && next_pos.x < COLS && next_pos.y >= 0 && next_pos.y < ROWS) {
-        if (!IsCellOccupiedByObstacle(game, (int)next_pos.x, (int)next_pos.y)) {
-            game->player.position = next_pos;
-        }
+    if (IsWalkable(game, next.x, next.y)) {
+        game->player = next;
     }
 }
 
@@ -229,87 +210,84 @@ static void GameUpdate(Game* game)
 {
     game->frames_counter++;
 
-    // Throttle Enemy movement speed (e.g., Moves every 15 frames)
-    if (game->frames_counter % 15 == 0) {
-        Direction dir = Pathfinding(game, &game->enemy, &game->player);
+    if (game->frames_counter % FRAMES_COUNTER == 0) {
+        Direction dir = Pathfinding(game, game->enemy, game->player);
 
-        Vector2 next_enemy_pos = game->enemy.position;
+        Point next_enemy = game->enemy;
         switch (dir) {
         case UP:
-            next_enemy_pos.y--;
+            next_enemy.y--;
             break;
         case DOWN:
-            next_enemy_pos.y++;
+            next_enemy.y++;
             break;
         case LEFT:
-            next_enemy_pos.x--;
+            next_enemy.x--;
             break;
         case RIGHT:
-            next_enemy_pos.x++;
+            next_enemy.x++;
             break;
         default:
             break; // No path found or reached target
         }
 
-        // Prevent enemy from clipping into solid obstacles
-        if (!IsCellOccupiedByObstacle(game, (int)next_enemy_pos.x, (int)next_enemy_pos.y)) {
-            game->enemy.position = next_enemy_pos;
+        if (IsWalkable(game, next_enemy.x, next_enemy.y)) {
+            game->enemy = next_enemy;
         }
     }
 }
 
 static void GamePlay(Game* game)
 {
-    // Collision condition with Enemy (Game Over)
-    if (CheckCollision(&game->player, &game->enemy)) {
+    // Collision with Enemy (Game Over)
+    if (game->player.x == game->enemy.x && game->player.y == game->enemy.y) {
         game->state = STATE_GAME_OVER;
+        return;
     }
 
-    // Check collision with obstacles (Break them)
-    for (int i = 0; i < game->total_obstacles; ++i) {
-        if (game->obstacles[i].solid && CheckCollision(&game->player, &game->obstacles[i])) {
-            game->obstacles[i].solid = false;
-            game->score += 10; // Gain points for removing obstacles
-        }
+    CellKind* cell = &game->map[game->player.x][game->player.y];
+    if (*cell == CELL_BONUS) {
+        *cell = CELL_EMPTY;
+        game->score += 10;
+        game->hits++;
+    }
+
+    if (game->hits >= game->total_bonus) {
+        game->state = STATE_WIN;
     }
 }
 
 static void GameRender(const Game* game)
 {
     BeginDrawing();
-    ClearBackground(COLOR_BACKGROUND);
+    {
+        ClearBackground(COLOR_BACKGROUND);
 
-    DrawGRID();
+        DrawGRID();
 
-    // Render active obstacles
-    for (int i = 0; i < game->total_obstacles; ++i) {
-        if (game->obstacles[i].solid) {
-            DrawEntity(&game->obstacles[i], COLOR_OBSTACLE);
+        for (int x = 0; x < COLS; x++) {
+            for (int y = 0; y < ROWS; y++) {
+                if (game->map[x][y] == CELL_BONUS) {
+                    DrawCell(x, y, COLOR_BONUS);
+                } else if (game->map[x][y] == CELL_OBSTACLE) {
+                    DrawCell(x, y, COLOR_OBSTACLE);
+                }
+            }
         }
+
+        DrawCell(game->player.x, game->player.y, COLOR_PLAYER);
+        DrawCell(game->enemy.x, game->enemy.y, COLOR_ENEMY);
+
+        DrawHUD(game);
     }
-
-    DrawEntity(&game->player, COLOR_PLAYER);
-    DrawEntity(&game->enemy, COLOR_ENEMY);
-
-    DrawHUD(game);
-
     EndDrawing();
 }
 
-static void GameQuit(Game* game)
+static void DrawCell(int x, int y, Color c)
 {
-    if (game->obstacles != NULL) {
-        free(game->obstacles);
-        game->obstacles = NULL;
-    }
-}
-
-static void DrawEntity(const Entity* e, Color c)
-{
-    // Render entity within grid coordinates mapped to pixels
     Rectangle rec = {
-        .x = e->position.x * CELL_WIDTH,
-        .y = HUD_HEIGHT + (e->position.y * CELL_HEIGHT),
+        .x = x * CELL_WIDTH,
+        .y = HUD_HEIGHT + (y * CELL_HEIGHT),
         .width = CELL_WIDTH - 2, // Slight offset padding for cleaner appearance
         .height = CELL_HEIGHT - 2
     };
@@ -328,75 +306,81 @@ static void DrawGRID(void)
 
 static void DrawHUD(const Game* game)
 {
-    // Background Top HUD Bar
     DrawRectangle(0, 0, SCREEN_WIDTH, HUD_HEIGHT, BLACK);
     DrawLine(0, HUD_HEIGHT, SCREEN_WIDTH, HUD_HEIGHT, RAYWHITE);
 
-    // Score and Context status rendering
-    DrawText(TextFormat("SCORE: %04d", game->score), 20, 10, 20, RAYWHITE);
+    DrawText(TextFormat("STARS: %02d/%02d   SCORE: %04d", game->hits, game->total_bonus, game->score),
+        20, 10, 20, RAYWHITE);
 
     if (game->state == STATE_PAUSE) {
-        DrawText("PAUSED (Press 'P' to Resume)", SCREEN_WIDTH / 2 - 140, 10, 20, GOLD);
+        DrawText("PAUSED (Press 'P' to Resume)", SCREEN_WIDTH - 320, 10, 20, GOLD);
+    } else if (game->state == STATE_WIN) {
+        DrawText("CONGRATULATIONS! Press 'R' to Restart", SCREEN_WIDTH - 380, 10, 20, RED);
     } else if (game->state == STATE_GAME_OVER) {
-        DrawText("GAME OVER! Press 'R' to Restart", SCREEN_WIDTH / 2 - 150, 10, 20, RED);
+        DrawText("GAME OVER! Press 'R' to Restart", SCREEN_WIDTH - 360, 10, 20, RED);
     } else {
-        DrawText("WASD/Arrows: Move | R: Restart | P: Pause", SCREEN_WIDTH - 420, 12, 16, LIGHTGRAY);
+        DrawText("WASD/Arrows: Move | R: Restart | P: Pause", SCREEN_WIDTH - 360, 12, 16, LIGHTGRAY);
     }
 }
 
-static bool CheckCollision(const Entity* e1, const Entity* e2)
+static bool IsInBounds(int x, int y)
 {
-    return (e1->position.x == e2->position.x && e1->position.y == e2->position.y && e1->solid && e2->solid);
+    return x >= 0 && x < COLS && y >= 0 && y < ROWS;
 }
 
-static bool IsCellOccupiedByObstacle(const Game* game, int x, int y)
+static bool IsWalkable(const Game* game, int x, int y)
 {
-    for (int i = 0; i < game->total_obstacles; ++i) {
-        if (game->obstacles[i].solid && (int)game->obstacles[i].position.x == x && (int)game->obstacles[i].position.y == y) {
-            return true;
-        }
-    }
-    return false;
+    return IsInBounds(x, y) && game->map[x][y] != CELL_OBSTACLE;
+}
+
+static bool IsOccupied(const Game* game, int x, int y)
+{
+    if (x == game->player.x && y == game->player.y)
+        return true;
+    if (x == game->enemy.x && y == game->enemy.y)
+        return true;
+    return game->map[x][y] != CELL_EMPTY;
+}
+
+static Point RandomEmptyCell(const Game* game)
+{
+    Point p;
+    do {
+        p.x = GetRandomValue(0, COLS - 1);
+        p.y = GetRandomValue(0, ROWS - 1);
+    } while (IsOccupied(game, p.x, p.y));
+    return p;
 }
 
 // A* Pathfinding implementation targeting coordinates dynamically around solid blocks
-static Direction Pathfinding(const Game* game, const Entity* start_entity, const Entity* target_entity)
+static Direction Pathfinding(const Game* game, Point start, Point target)
 {
-    int startX = (int)start_entity->position.x;
-    int startY = (int)start_entity->position.y;
-    int targetX = (int)target_entity->position.x;
-    int targetY = (int)target_entity->position.y;
-
-    if (startX == targetX && startY == targetY)
+    if (start.x == target.x && start.y == target.y)
         return NONE;
 
-    // Allocate 2D map graph grid nodes
     Node grid[COLS][ROWS];
     for (int x = 0; x < COLS; x++) {
         for (int y = 0; y < ROWS; y++) {
             grid[x][y].x = x;
             grid[x][y].y = y;
-            grid[x][y].walkable = !IsCellOccupiedByObstacle(game, x, y);
+            grid[x][y].walkable = IsWalkable(game, x, y);
             grid[x][y].g_cost = 1000000; // Simulating Infinity
-            grid[x][y].h_cost = abs(x - targetX) + abs(y - targetY); // Manhattan distance heuristic
+            grid[x][y].h_cost = abs(x - target.x) + abs(y - target.y); // Manhattan distance heuristic
             grid[x][y].f_cost = 1000000;
             grid[x][y].parent = NULL;
         }
     }
 
-    // Explicitly open lists tracking structures
     bool open_set[COLS][ROWS] = { false };
     bool closed_set[COLS][ROWS] = { false };
 
-    // Setup initial node
-    grid[startX][startY].g_cost = 0;
-    grid[startX][startY].f_cost = grid[startX][startY].h_cost;
-    open_set[startX][startY] = true;
+    grid[start.x][start.y].g_cost = 0;
+    grid[start.x][start.y].f_cost = grid[start.x][start.y].h_cost;
+    open_set[start.x][start.y] = true;
 
     bool path_found = false;
 
     while (true) {
-        // Find node with lowest f_cost in open set
         int currentX = -1, currentY = -1;
         int min_f = 1000000;
 
@@ -413,8 +397,7 @@ static Direction Pathfinding(const Game* game, const Entity* start_entity, const
         if (currentX == -1)
             break; // Open set is empty, no path available
 
-        // Check if destination reached
-        if (currentX == targetX && currentY == targetY) {
+        if (currentX == target.x && currentY == target.y) {
             path_found = true;
             break;
         }
@@ -422,7 +405,6 @@ static Direction Pathfinding(const Game* game, const Entity* start_entity, const
         open_set[currentX][currentY] = false;
         closed_set[currentX][currentY] = true;
 
-        // Process 4 connected neighbors (Up, Down, Left, Right)
         int dx[] = { 0, 0, -1, 1 };
         int dy[] = { -1, 1, 0, 0 };
 
@@ -446,31 +428,30 @@ static Direction Pathfinding(const Game* game, const Entity* start_entity, const
         }
     }
 
-    // Trace path back to find the first step
     if (path_found) {
-        Node* curr = &grid[targetX][targetY];
-        while (curr->parent != NULL && (curr->parent->x != startX || curr->parent->y != startY)) {
+        Node* curr = &grid[target.x][target.y];
+        while (curr->parent != NULL && (curr->parent->x != start.x || curr->parent->y != start.y)) {
             curr = curr->parent;
         }
 
-        if (curr->x < startX)
+        if (curr->x < start.x)
             return LEFT;
-        if (curr->x > startX)
+        if (curr->x > start.x)
             return RIGHT;
-        if (curr->y < startY)
+        if (curr->y < start.y)
             return UP;
-        if (curr->y > startY)
+        if (curr->y > start.y)
             return DOWN;
     }
 
     // Fallback: Greedy straight-line movement if pathfinding is blocked
-    if (startX < targetX && !IsCellOccupiedByObstacle(game, startX + 1, startY))
+    if (start.x < target.x && IsWalkable(game, start.x + 1, start.y))
         return RIGHT;
-    if (startX > targetX && !IsCellOccupiedByObstacle(game, startX - 1, startY))
+    if (start.x > target.x && IsWalkable(game, start.x - 1, start.y))
         return LEFT;
-    if (startY < targetY && !IsCellOccupiedByObstacle(game, startX, startY + 1))
+    if (start.y < target.y && IsWalkable(game, start.x, start.y + 1))
         return DOWN;
-    if (startY > targetY && !IsCellOccupiedByObstacle(game, startX, startY - 1))
+    if (start.y > target.y && IsWalkable(game, start.x, start.y - 1))
         return UP;
 
     return NONE;
