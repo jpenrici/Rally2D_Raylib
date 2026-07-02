@@ -4,6 +4,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+// Graphics
+#ifdef ONLY_SHAPE
+#define HIDDEN_IMAGE true
+#else
+#define HIDDEN_IMAGE false
+#endif
 
 // Window
 #define SCREEN_TITLE "Game"
@@ -18,23 +26,23 @@
 #define CELL_WIDTH (SCREEN_WIDTH / COLS)
 
 // Player
-#define PLAYER_PATH "assets/player.png"
+#define PLAYER_PATH "resources/player.png"
 #define PLAYER_WIDTH 64
 #define PLAYER_HEIGHT 64
 #define PLAYER_ROWS 1
-#define PLAYER_COLS 4
+#define PLAYER_COLS 2
 
 // Enemy
-#define ENEMY_PATH "assets/enemy.png"
+#define ENEMY_PATH "resources/enemy.png"
 #define ENEMY_WIDTH 64
 #define ENEMY_HEIGHT 64
 #define ENEMY_ROWS 1
-#define ENEMY_COLS 4
+#define ENEMY_COLS 2
 
 #define FRAMES_COUNTER 20 // Throttle Enemy movement speed
 
 // Bonus
-#define BONUS_PATH "assets/bonus.png"
+#define BONUS_PATH "resources/bonus.png"
 #define BONUS_WIDTH 64
 #define BONUS_HEIGHT 64
 #define BONUS_ROWS 1
@@ -44,11 +52,11 @@
 #define MAX_BONUS 15
 
 // Obstacles
-#define OBST_PATH "assets/obstacles.png"
+#define OBST_PATH "resources/obstacles.png"
 #define OBST_WIDTH 64
 #define OBST_HEIGHT 64
 #define OBST_ROWS 1
-#define OBST_COLS 3
+#define OBST_COLS 1
 
 #define MIN_OBST 25
 #define MAX_OBST 50
@@ -63,18 +71,18 @@
 
 // Structures
 typedef struct {
-    int srcX; // source X offset inside the texture (pixels)
-    int srcY; // source Y offset inside the texture (pixels)
-    int srcW; // source rectangle width
-    int srcH; // source rectangle height
-    int width; // image width
-    int height; // image height
+    unsigned srcX; // source X offset inside the texture (pixels)
+    unsigned srcY; // source Y offset inside the texture (pixels)
+    unsigned srcW; // source rectangle width
+    unsigned srcH; // source rectangle height
+    unsigned width; // image width
+    unsigned height; // image height
 } Sprite;
 
 typedef struct {
     Texture2D texture; // image with the Sprites
     Sprite* frames; // array of [rows * cols] Sprite values
-    int count; // total number of frames (rows * cols)
+    unsigned count; // total number of frames (rows * cols)
     bool loaded; // if false, use fallback shape
 } SpriteSheet;
 
@@ -84,14 +92,6 @@ typedef enum {
     CELL_OBSTACLE
 } CellKind;
 
-typedef struct {
-    SpriteSheet sheet;
-    bool still; // non-animated image chosen from the available sprite options
-    int animTimer; // counts frames before advancing the animation
-    int frame; // current animation or image frame index
-    CellKind cellKing;
-} Entity;
-
 typedef enum {
     UP,
     DOWN,
@@ -99,6 +99,21 @@ typedef enum {
     RIGHT,
     NONE
 } Direction;
+
+typedef struct {
+    SpriteSheet sheet;
+    bool still; // for still images
+    unsigned animTimer; // counts frames before advancing the animation
+    unsigned frame; // current animation or image frame index
+    Direction direction; // sets the orientation angle of the sprite display
+} Entity;
+
+typedef enum {
+    PLAYER_ENTITY = 0,
+    ENEMY_ENTITY = 1,
+    BONUS_ENTITY = 2,
+    OBSTACLE_ENTITY = 3
+} EntityType;
 
 typedef struct {
     int x;
@@ -118,15 +133,16 @@ typedef struct {
     Point enemy;
 
     CellKind map[COLS][ROWS];
-    int total_bonus;
-    int total_obstacles;
+    unsigned total_bonus;
+    unsigned total_obstacles;
 
-    Entity entity[4]; // 0 - Player, 1 - Enemy, 2 - Bonus and 3 - Obstacle
+    Entity entity[4]; // Store images for player, enemy, bonus, and obstacle
+
     GameState state;
-
     int hits;
     int score;
-    int frames_counter; // Used to throttle enemy movement speed
+
+    unsigned frames_counter; // Used to throttle enemy movement speed
 } Game;
 
 // A* Pathfinding Node Structure
@@ -152,7 +168,7 @@ void UnloadAllAssets(Game* game);
 static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols,
     unsigned frameW, unsigned frameH);
 
-static void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y);
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int x, int y);
 static void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH);
 static void UnloadSheet(SpriteSheet* sheet);
 
@@ -187,11 +203,16 @@ int main(void)
     }
 
     CloseWindow();
+
     return 0;
 }
 
 static void GameInit(Game* game)
 {
+    UnloadAllAssets(game);
+    memset(game, 0, sizeof(*game));
+    LoadAllAssets(game);
+
     game->state = STATE_RUNNING;
 
     game->hits = 0;
@@ -199,8 +220,8 @@ static void GameInit(Game* game)
     game->frames_counter = 0;
 
     // Clear the map
-    for (int x = 0; x < COLS; x++) {
-        for (int y = 0; y < ROWS; y++) {
+    for (unsigned x = 0; x < COLS; x++) {
+        for (unsigned y = 0; y < ROWS; y++) {
             game->map[x][y] = CELL_EMPTY;
         }
     }
@@ -216,18 +237,39 @@ static void GameInit(Game* game)
     } while (game->enemy.x == game->player.x && game->enemy.y == game->player.y);
 
     // Place Bonus
-    game->total_bonus = GetRandomValue(MIN_BONUS, MAX_BONUS);
-    for (int i = 0; i < game->total_bonus; i++) {
+    game->total_bonus = (unsigned)GetRandomValue(MIN_BONUS, MAX_BONUS);
+    for (unsigned i = 0; i < game->total_bonus; i++) {
         Point p = RandomEmptyCell(game);
         game->map[p.x][p.y] = CELL_BONUS;
     }
 
     // Place Obstacles
-    game->total_obstacles = GetRandomValue(MIN_OBST, MAX_OBST);
-    for (int i = 0; i < game->total_obstacles; i++) {
+    game->total_obstacles = (unsigned)GetRandomValue(MIN_OBST, MAX_OBST);
+    for (unsigned i = 0; i < game->total_obstacles; i++) {
         Point p = RandomEmptyCell(game);
         game->map[p.x][p.y] = CELL_OBSTACLE;
     }
+
+    // Entities
+    game->entity[PLAYER_ENTITY].still = false;
+    game->entity[PLAYER_ENTITY].animTimer = 0;
+    game->entity[PLAYER_ENTITY].frame = 0;
+    game->entity[PLAYER_ENTITY].direction = NONE;
+
+    game->entity[ENEMY_ENTITY].still = false;
+    game->entity[ENEMY_ENTITY].animTimer = 0;
+    game->entity[ENEMY_ENTITY].frame = 0;
+    game->entity[ENEMY_ENTITY].direction = NONE;
+
+    game->entity[BONUS_ENTITY].still = true;
+    game->entity[BONUS_ENTITY].animTimer = 0;
+    game->entity[BONUS_ENTITY].frame = 0;
+    game->entity[BONUS_ENTITY].direction = NONE;
+
+    game->entity[OBSTACLE_ENTITY].still = true;
+    game->entity[OBSTACLE_ENTITY].animTimer = 0;
+    game->entity[OBSTACLE_ENTITY].frame = 0;
+    game->entity[OBSTACLE_ENTITY].direction = NONE;
 }
 
 static void GameHandleInput(Game* game)
@@ -312,7 +354,7 @@ static void GamePlay(Game* game)
         game->hits++;
     }
 
-    if (game->hits >= game->total_bonus) {
+    if (game->hits >= (int)game->total_bonus) {
         game->state = STATE_WIN;
     }
 }
@@ -328,15 +370,30 @@ static void GameRender(const Game* game)
         for (int x = 0; x < COLS; x++) {
             for (int y = 0; y < ROWS; y++) {
                 if (game->map[x][y] == CELL_BONUS) {
-                    DrawCell(x, y, COLOR_BONUS);
+                    if (!game->entity[BONUS_ENTITY].sheet.loaded || HIDDEN_IMAGE)
+                        DrawCell(x, y, COLOR_BONUS);
+                    else
+                        DrawSprite(&game->entity[BONUS_ENTITY].sheet, game->entity[BONUS_ENTITY].frame, x, y);
                 } else if (game->map[x][y] == CELL_OBSTACLE) {
-                    DrawCell(x, y, COLOR_OBSTACLE);
+                    if (!game->entity[OBSTACLE_ENTITY].sheet.loaded || HIDDEN_IMAGE)
+                        DrawCell(x, y, COLOR_OBSTACLE);
+                    else
+                        DrawSprite(&game->entity[OBSTACLE_ENTITY].sheet, game->entity[OBSTACLE_ENTITY].frame, x, y);
                 }
             }
         }
 
-        DrawCell(game->player.x, game->player.y, COLOR_PLAYER);
-        DrawCell(game->enemy.x, game->enemy.y, COLOR_ENEMY);
+        if (!game->entity[PLAYER_ENTITY].sheet.loaded || HIDDEN_IMAGE)
+            DrawCell(game->player.x, game->player.y, COLOR_PLAYER);
+        else
+            DrawSprite(&game->entity[PLAYER_ENTITY].sheet, game->entity[PLAYER_ENTITY].frame,
+                game->player.x, game->player.y);
+
+        if (!game->entity[ENEMY_ENTITY].sheet.loaded || HIDDEN_IMAGE)
+            DrawCell(game->enemy.x, game->enemy.y, COLOR_ENEMY);
+        else
+            DrawSprite(&game->entity[ENEMY_ENTITY].sheet, game->entity[ENEMY_ENTITY].frame,
+                game->player.x, game->player.y);
 
         DrawHUD(game);
     }
@@ -346,20 +403,20 @@ static void GameRender(const Game* game)
 void LoadAllAssets(Game* game)
 {
     // Player
-    PrepareSheet(&game->entity[0].sheet, PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_WIDTH);
-    ResizeSprite(&game->entity[0].sheet, CELL_WIDTH, CELL_HEIGHT);
+    PrepareSheet(&game->entity[PLAYER_ENTITY].sheet, PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_WIDTH);
+    ResizeSprite(&game->entity[PLAYER_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
 
     // Enemy
-    PrepareSheet(&game->entity[1].sheet, ENEMY_PATH, ENEMY_ROWS, ENEMY_COLS, ENEMY_WIDTH, ENEMY_HEIGHT);
-    ResizeSprite(&game->entity[1].sheet, CELL_WIDTH, CELL_HEIGHT);
+    PrepareSheet(&game->entity[ENEMY_ENTITY].sheet, ENEMY_PATH, ENEMY_ROWS, ENEMY_COLS, ENEMY_WIDTH, ENEMY_HEIGHT);
+    ResizeSprite(&game->entity[ENEMY_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
 
     // Bonus
-    PrepareSheet(&game->entity[2].sheet, BONUS_PATH, BONUS_ROWS, BONUS_COLS, BONUS_WIDTH, BONUS_HEIGHT);
-    ResizeSprite(&game->entity[2].sheet, CELL_WIDTH, CELL_HEIGHT);
+    PrepareSheet(&game->entity[BONUS_ENTITY].sheet, BONUS_PATH, BONUS_ROWS, BONUS_COLS, BONUS_WIDTH, BONUS_HEIGHT);
+    ResizeSprite(&game->entity[BONUS_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
 
     // Obstacle
-    PrepareSheet(&game->entity[3].sheet, OBST_PATH, OBST_ROWS, OBST_COLS, OBST_WIDTH, OBST_HEIGHT);
-    ResizeSprite(&game->entity[3].sheet, CELL_WIDTH, CELL_HEIGHT);
+    PrepareSheet(&game->entity[OBSTACLE_ENTITY].sheet, OBST_PATH, OBST_ROWS, OBST_COLS, OBST_WIDTH, OBST_HEIGHT);
+    ResizeSprite(&game->entity[OBSTACLE_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
 }
 
 void UnloadAllAssets(Game* game)
@@ -401,14 +458,14 @@ static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, un
         fprintf(stderr, "[sprite] could not load: %s\n", path);
 }
 
-static void DrawSprite(const SpriteSheet* sheet, unsigned frame, float x, float y)
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int x, int y)
 {
     if (!sheet->loaded || frame >= sheet->count)
         return;
 
     const Sprite* s = &sheet->frames[frame];
     Rectangle src = { (float)s->srcX, (float)s->srcY, (float)s->srcW, (float)s->srcH };
-    Rectangle dst = { x, y, (float)s->width, (float)s->height };
+    Rectangle dst = { (float)x, (float)y, (float)s->width, (float)s->height };
     DrawTexturePro(sheet->texture, src, dst, (Vector2) { 0.0f, 0.0f }, 0.0f, WHITE);
 }
 
@@ -439,10 +496,10 @@ static void UnloadSheet(SpriteSheet* sheet)
 static void DrawCell(int x, int y, Color c)
 {
     Rectangle rec = {
-        .x = x * CELL_WIDTH,
-        .y = HUD_HEIGHT + (y * CELL_HEIGHT),
-        .width = CELL_WIDTH - 2, // Slight offset padding for cleaner appearance
-        .height = CELL_HEIGHT - 2
+        .x = (float)(x * CELL_WIDTH),
+        .y = (float)(HUD_HEIGHT + (y * CELL_HEIGHT)),
+        .width = (float)(CELL_WIDTH - 2), // Slight offset padding for cleaner appearance
+        .height = (float)(CELL_HEIGHT - 2)
     };
     DrawRectangleRec(rec, c);
 }

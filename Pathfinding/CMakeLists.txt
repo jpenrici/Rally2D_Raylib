@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
 project(
-  Project_Name
+  PathfindingGame
   VERSION 1.0.0
   LANGUAGES C)
 
@@ -11,11 +11,18 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+option(ONLY_SHAPE "Hide images if loaded" OFF)
+
 find_package(raylib REQUIRED QUIET)
 
 set(SOURCES src/main.c)
 
 add_executable(${PROGRAM_NAME} ${SOURCES})
+
+if(ONLY_SHAPE)
+  target_compile_definitions(${PROGRAM_NAME} PRIVATE ONLY_SHAPE)
+  message(STATUS "ONLY_SHAPE: images disabled for this build")
+endif()
 
 target_link_libraries(
   ${PROGRAM_NAME}
@@ -28,4 +35,13 @@ target_link_libraries(
           pthread
           dl)
 
-add_compile_options(-Wall -Wextra -Wpedantic -Wconversion)
+add_custom_command(
+  TARGET ${PROGRAM_NAME}
+  POST_BUILD
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/resources
+    $<TARGET_FILE_DIR:${PROGRAM_NAME}>/resources
+  COMMENT "Copyng resources...")
+
+target_compile_options(${PROGRAM_NAME} PRIVATE -Wall -Wextra -Wpedantic
+                                               -Wconversion)
