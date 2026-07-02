@@ -1,3 +1,16 @@
+/*
+ * A simple game to test the pathfinding algorithm.
+ *
+ * Controls:
+ *   WASD or Arrow keys move the player
+ *   P for pause
+ *   R restarts after time runs out
+ *   Q / ESC exits the game
+ *
+ * Build-time flags:
+ *   -DONLY_SHAPE   hide image if loaded (development / CI)
+ */
+
 #include "raylib.h"
 
 #include <math.h>
@@ -52,7 +65,7 @@
 #define MAX_BONUS 15
 
 // Obstacles
-#define OBST_PATH "resources/obstacles.png"
+#define OBST_PATH "resources/obstacle.png"
 #define OBST_WIDTH 64
 #define OBST_HEIGHT 64
 #define OBST_ROWS 1
@@ -69,14 +82,17 @@
 #define COLOR_BACKGROUND DARKBROWN
 #define COLOR_GRID DARKGRAY
 
+// Sprite orientation
+#define SPRITE_DEFAULT_FACING UP
+
 // Structures
 typedef struct {
     unsigned srcX; // source X offset inside the texture (pixels)
     unsigned srcY; // source Y offset inside the texture (pixels)
     unsigned srcW; // source rectangle width
     unsigned srcH; // source rectangle height
-    unsigned width; // image width
-    unsigned height; // image height
+    unsigned width; // display width (after resize)
+    unsigned height; // display height (after resize)
 } Sprite;
 
 typedef struct {
@@ -102,17 +118,18 @@ typedef enum {
 
 typedef struct {
     SpriteSheet sheet;
-    bool still; // for still images
+    bool still; // for still images (no directional rotation)
     unsigned animTimer; // counts frames before advancing the animation
     unsigned frame; // current animation or image frame index
-    Direction direction; // sets the orientation angle of the sprite display
+    Direction direction; // last movement direction, used to orient the sprite
 } Entity;
 
 typedef enum {
     PLAYER_ENTITY = 0,
     ENEMY_ENTITY = 1,
     BONUS_ENTITY = 2,
-    OBSTACLE_ENTITY = 3
+    OBSTACLE_ENTITY = 3,
+    ENTITY_COUNT = 4
 } EntityType;
 
 typedef struct {
@@ -136,7 +153,7 @@ typedef struct {
     unsigned total_bonus;
     unsigned total_obstacles;
 
-    Entity entity[4]; // Store images for player, enemy, bonus, and obstacle
+    Entity entity[ENTITY_COUNT]; // Store images for player, enemy, bonus, and obstacle
 
     GameState state;
     int hits;
@@ -155,24 +172,39 @@ typedef struct Node {
     struct Node* parent;
 } Node;
 
+// Asset table: describes how to load each entity's sprite sheet
+typedef struct {
+    const char* path;
+    unsigned rows, cols, frameW, frameH;
+} SheetSpec;
+
+static const SheetSpec kSheetSpecs[ENTITY_COUNT] = {
+    [PLAYER_ENTITY] = { PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_HEIGHT },
+    [ENEMY_ENTITY] = { ENEMY_PATH, ENEMY_ROWS, ENEMY_COLS, ENEMY_WIDTH, ENEMY_HEIGHT },
+    [BONUS_ENTITY] = { BONUS_PATH, BONUS_ROWS, BONUS_COLS, BONUS_WIDTH, BONUS_HEIGHT },
+    [OBSTACLE_ENTITY] = { OBST_PATH, OBST_ROWS, OBST_COLS, OBST_WIDTH, OBST_HEIGHT },
+};
+
 // Prototypes
 static void GameInit(Game* game);
 static void GameHandleInput(Game* game);
 static void GameUpdate(Game* game);
-static void GameRender(const Game* game);
 static void GamePlay(Game* game);
+static void GameRender(const Game* game);
 
 void LoadAllAssets(Game* game);
 void UnloadAllAssets(Game* game);
 
 static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, unsigned cols,
     unsigned frameW, unsigned frameH);
-
-static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int x, int y);
 static void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH);
 static void UnloadSheet(SpriteSheet* sheet);
 
+static Rectangle CellRect(int x, int y);
+static float DirectionAngle(Direction dir);
 static void DrawCell(int x, int y, Color c);
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int gridX, int gridY, float rotation);
+static void DrawEntityAt(const Game* game, EntityType type, int gridX, int gridY, Color fallbackColor);
 static void DrawGRID(void);
 static void DrawHUD(const Game* game);
 
@@ -202,6 +234,7 @@ int main(void)
         GameRender(&game);
     }
 
+    UnloadAllAssets(&game);
     CloseWindow();
 
     return 0;
@@ -214,7 +247,6 @@ static void GameInit(Game* game)
     LoadAllAssets(game);
 
     game->state = STATE_RUNNING;
-
     game->hits = 0;
     game->score = 0;
     game->frames_counter = 0;
@@ -250,26 +282,14 @@ static void GameInit(Game* game)
         game->map[p.x][p.y] = CELL_OBSTACLE;
     }
 
-    // Entities
-    game->entity[PLAYER_ENTITY].still = false;
-    game->entity[PLAYER_ENTITY].animTimer = 0;
-    game->entity[PLAYER_ENTITY].frame = 0;
-    game->entity[PLAYER_ENTITY].direction = NONE;
-
-    game->entity[ENEMY_ENTITY].still = false;
-    game->entity[ENEMY_ENTITY].animTimer = 0;
-    game->entity[ENEMY_ENTITY].frame = 0;
-    game->entity[ENEMY_ENTITY].direction = NONE;
-
-    game->entity[BONUS_ENTITY].still = true;
-    game->entity[BONUS_ENTITY].animTimer = 0;
-    game->entity[BONUS_ENTITY].frame = 0;
-    game->entity[BONUS_ENTITY].direction = NONE;
-
-    game->entity[OBSTACLE_ENTITY].still = true;
-    game->entity[OBSTACLE_ENTITY].animTimer = 0;
-    game->entity[OBSTACLE_ENTITY].frame = 0;
-    game->entity[OBSTACLE_ENTITY].direction = NONE;
+    // Reset entity animation/orientation state.
+    // Only Player and Enemy rotate to face their movement direction.
+    for (unsigned i = 0; i < ENTITY_COUNT; i++) {
+        game->entity[i].animTimer = 0;
+        game->entity[i].frame = 0;
+        game->entity[i].direction = SPRITE_DEFAULT_FACING;
+        game->entity[i].still = (i == BONUS_ENTITY || i == OBSTACLE_ENTITY);
+    }
 }
 
 static void GameHandleInput(Game* game)
@@ -282,7 +302,7 @@ static void GameHandleInput(Game* game)
             game->state = STATE_RUNNING;
     }
 
-    if (IsKeyPressed(KEY_Q)) {
+    if (IsKeyPressed(KEY_Q) || IsKeyPressed(KEY_ESCAPE)) {
         game->state = STATE_QUIT;
     }
     if (IsKeyPressed(KEY_R))
@@ -293,18 +313,25 @@ static void GameHandleInput(Game* game)
 
     // Grid-based Player Movement Input.
     Point next = game->player;
+    Direction moveDir = NONE;
 
-    if (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP))
+    if (IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP)) {
         next.y--;
-    else if (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN))
+        moveDir = UP;
+    } else if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN)) {
         next.y++;
-    else if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
+        moveDir = DOWN;
+    } else if (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT)) {
         next.x--;
-    else if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
+        moveDir = LEFT;
+    } else if (IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT)) {
         next.x++;
+        moveDir = RIGHT;
+    }
 
-    if (IsWalkable(game, next.x, next.y)) {
+    if (moveDir != NONE && IsWalkable(game, next.x, next.y)) {
         game->player = next;
+        game->entity[PLAYER_ENTITY].direction = moveDir;
     }
 }
 
@@ -332,6 +359,9 @@ static void GameUpdate(Game* game)
         default:
             break; // No path found or reached target
         }
+
+        if (dir != NONE)
+            game->entity[ENEMY_ENTITY].direction = dir;
 
         if (IsWalkable(game, next_enemy.x, next_enemy.y)) {
             game->enemy = next_enemy;
@@ -369,31 +399,15 @@ static void GameRender(const Game* game)
 
         for (int x = 0; x < COLS; x++) {
             for (int y = 0; y < ROWS; y++) {
-                if (game->map[x][y] == CELL_BONUS) {
-                    if (!game->entity[BONUS_ENTITY].sheet.loaded || HIDDEN_IMAGE)
-                        DrawCell(x, y, COLOR_BONUS);
-                    else
-                        DrawSprite(&game->entity[BONUS_ENTITY].sheet, game->entity[BONUS_ENTITY].frame, x, y);
-                } else if (game->map[x][y] == CELL_OBSTACLE) {
-                    if (!game->entity[OBSTACLE_ENTITY].sheet.loaded || HIDDEN_IMAGE)
-                        DrawCell(x, y, COLOR_OBSTACLE);
-                    else
-                        DrawSprite(&game->entity[OBSTACLE_ENTITY].sheet, game->entity[OBSTACLE_ENTITY].frame, x, y);
-                }
+                if (game->map[x][y] == CELL_BONUS)
+                    DrawEntityAt(game, BONUS_ENTITY, x, y, COLOR_BONUS);
+                else if (game->map[x][y] == CELL_OBSTACLE)
+                    DrawEntityAt(game, OBSTACLE_ENTITY, x, y, COLOR_OBSTACLE);
             }
         }
 
-        if (!game->entity[PLAYER_ENTITY].sheet.loaded || HIDDEN_IMAGE)
-            DrawCell(game->player.x, game->player.y, COLOR_PLAYER);
-        else
-            DrawSprite(&game->entity[PLAYER_ENTITY].sheet, game->entity[PLAYER_ENTITY].frame,
-                game->player.x, game->player.y);
-
-        if (!game->entity[ENEMY_ENTITY].sheet.loaded || HIDDEN_IMAGE)
-            DrawCell(game->enemy.x, game->enemy.y, COLOR_ENEMY);
-        else
-            DrawSprite(&game->entity[ENEMY_ENTITY].sheet, game->entity[ENEMY_ENTITY].frame,
-                game->player.x, game->player.y);
+        DrawEntityAt(game, PLAYER_ENTITY, game->player.x, game->player.y, COLOR_PLAYER);
+        DrawEntityAt(game, ENEMY_ENTITY, game->enemy.x, game->enemy.y, COLOR_ENEMY);
 
         DrawHUD(game);
     }
@@ -402,26 +416,16 @@ static void GameRender(const Game* game)
 
 void LoadAllAssets(Game* game)
 {
-    // Player
-    PrepareSheet(&game->entity[PLAYER_ENTITY].sheet, PLAYER_PATH, PLAYER_ROWS, PLAYER_COLS, PLAYER_WIDTH, PLAYER_WIDTH);
-    ResizeSprite(&game->entity[PLAYER_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
-
-    // Enemy
-    PrepareSheet(&game->entity[ENEMY_ENTITY].sheet, ENEMY_PATH, ENEMY_ROWS, ENEMY_COLS, ENEMY_WIDTH, ENEMY_HEIGHT);
-    ResizeSprite(&game->entity[ENEMY_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
-
-    // Bonus
-    PrepareSheet(&game->entity[BONUS_ENTITY].sheet, BONUS_PATH, BONUS_ROWS, BONUS_COLS, BONUS_WIDTH, BONUS_HEIGHT);
-    ResizeSprite(&game->entity[BONUS_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
-
-    // Obstacle
-    PrepareSheet(&game->entity[OBSTACLE_ENTITY].sheet, OBST_PATH, OBST_ROWS, OBST_COLS, OBST_WIDTH, OBST_HEIGHT);
-    ResizeSprite(&game->entity[OBSTACLE_ENTITY].sheet, CELL_WIDTH, CELL_HEIGHT);
+    for (unsigned i = 0; i < ENTITY_COUNT; i++) {
+        const SheetSpec* s = &kSheetSpecs[i];
+        PrepareSheet(&game->entity[i].sheet, s->path, s->rows, s->cols, s->frameW, s->frameH);
+        ResizeSprite(&game->entity[i].sheet, CELL_WIDTH, CELL_HEIGHT);
+    }
 }
 
 void UnloadAllAssets(Game* game)
 {
-    for (unsigned i = 0; i < 4; ++i) {
+    for (unsigned i = 0; i < ENTITY_COUNT; i++) {
         UnloadSheet(&game->entity[i].sheet);
     }
 }
@@ -442,13 +446,14 @@ static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, un
     unsigned idx = 0;
     for (unsigned r = 0; r < rows; ++r) {
         for (unsigned c = 0; c < cols; ++c) {
-            Sprite* s = &sheet->frames[idx++];
-            s->srcX = c * frameW;
-            s->srcY = r * frameH;
-            s->srcW = frameW;
-            s->srcH = frameH;
-            s->width = frameW;
-            s->height = frameH;
+            sheet->frames[idx++] = (Sprite) {
+                .srcX = c * frameW,
+                .srcY = r * frameH,
+                .srcW = frameW,
+                .srcH = frameH,
+                .width = frameW,
+                .height = frameH
+            };
         }
     }
 
@@ -456,17 +461,6 @@ static void PrepareSheet(SpriteSheet* sheet, const char* path, unsigned rows, un
     sheet->loaded = (sheet->texture.id != 0);
     if (!sheet->loaded)
         fprintf(stderr, "[sprite] could not load: %s\n", path);
-}
-
-static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int x, int y)
-{
-    if (!sheet->loaded || frame >= sheet->count)
-        return;
-
-    const Sprite* s = &sheet->frames[frame];
-    Rectangle src = { (float)s->srcX, (float)s->srcY, (float)s->srcW, (float)s->srcH };
-    Rectangle dst = { (float)x, (float)y, (float)s->width, (float)s->height };
-    DrawTexturePro(sheet->texture, src, dst, (Vector2) { 0.0f, 0.0f }, 0.0f, WHITE);
 }
 
 static void ResizeSprite(SpriteSheet* sheet, unsigned newW, unsigned newH)
@@ -493,15 +487,80 @@ static void UnloadSheet(SpriteSheet* sheet)
     }
 }
 
-static void DrawCell(int x, int y, Color c)
+// Pixel rectangle of a grid cell, shared by DrawCell and DrawSprite so both
+// always agree on where cell (x, y) actually is on screen.
+static Rectangle CellRect(int x, int y)
 {
-    Rectangle rec = {
+    return (Rectangle) {
         .x = (float)(x * CELL_WIDTH),
         .y = (float)(HUD_HEIGHT + (y * CELL_HEIGHT)),
-        .width = (float)(CELL_WIDTH - 2), // Slight offset padding for cleaner appearance
-        .height = (float)(CELL_HEIGHT - 2)
+        .width = (float)CELL_WIDTH,
+        .height = (float)CELL_HEIGHT
     };
+}
+
+// Rotation (degrees, clockwise) to apply so the sprite's default artwork
+// orientation (SPRITE_DEFAULT_FACING) ends up facing `dir`.
+static float DirectionAngle(Direction dir)
+{
+    static const float angleFromUp[] = {
+        [UP] = 0.0f,
+        [RIGHT] = 90.0f,
+        [DOWN] = 180.0f,
+        [LEFT] = 270.0f,
+    };
+
+    if (dir == NONE)
+        dir = SPRITE_DEFAULT_FACING;
+
+    float target = angleFromUp[dir];
+    float base = angleFromUp[SPRITE_DEFAULT_FACING];
+
+    return target - base;
+}
+
+static void DrawCell(int x, int y, Color c)
+{
+    Rectangle rec = CellRect(x, y);
+    rec.width -= 2; // Slight offset padding for cleaner appearance
+    rec.height -= 2;
     DrawRectangleRec(rec, c);
+}
+
+static void DrawSprite(const SpriteSheet* sheet, unsigned frame, int gridX, int gridY, float rotation)
+{
+    if (!sheet->loaded || frame >= sheet->count)
+        return;
+
+    const Sprite* s = &sheet->frames[frame];
+    Rectangle src = { (float)s->srcX, (float)s->srcY, (float)s->srcW, (float)s->srcH };
+
+    // dst is positioned/sized to match the grid cell exactly (same mapping
+    // as CellRect), then rotated around its own center.
+    Rectangle dst = CellRect(gridX, gridY);
+    dst.width = (float)s->width;
+    dst.height = (float)s->height;
+
+    Vector2 origin = { dst.width / 2.0f, dst.height / 2.0f };
+    dst.x += origin.x;
+    dst.y += origin.y;
+
+    DrawTexturePro(sheet->texture, src, dst, origin, rotation, WHITE);
+}
+
+// Draws an entity (its sprite if loaded, otherwise a flat colored cell) at a
+// given grid position, oriented towards its last movement direction.
+static void DrawEntityAt(const Game* game, EntityType type, int gridX, int gridY, Color fallbackColor)
+{
+    const Entity* e = &game->entity[type];
+
+    if (!e->sheet.loaded || HIDDEN_IMAGE) {
+        DrawCell(gridX, gridY, fallbackColor);
+        return;
+    }
+
+    float rotation = e->still ? 0.0f : DirectionAngle(e->direction);
+    DrawSprite(&e->sheet, e->frame, gridX, gridY, rotation);
 }
 
 static void DrawGRID(void)
@@ -525,7 +584,7 @@ static void DrawHUD(const Game* game)
     if (game->state == STATE_PAUSE) {
         DrawText("PAUSED (Press 'P' to Resume)", SCREEN_WIDTH - 320, 10, 20, GOLD);
     } else if (game->state == STATE_WIN) {
-        DrawText("CONGRATULATIONS! Press 'R' to Restart", SCREEN_WIDTH - 380, 10, 20, RED);
+        DrawText("CONGRATULATIONS! Press 'R' to Restart", SCREEN_WIDTH - 400, 10, 20, RED);
     } else if (game->state == STATE_GAME_OVER) {
         DrawText("GAME OVER! Press 'R' to Restart", SCREEN_WIDTH - 360, 10, 20, RED);
     } else {
